@@ -1,12 +1,5 @@
-import torch
 from torch import nn
-from torchvision.datasets import MNIST
-from torch.utils.data import DataLoader
-from torchvision.transforms.transforms import *
-import tqdm
-import torch.nn.functional as F
 from vector_quantize_pytorch import VectorQuantize
-from torch.nn.functional import mse_loss
 
 
 class ResBlock(nn.Module):
@@ -23,6 +16,7 @@ class ResBlock(nn.Module):
 
     def forward(self, x):
         return x + self.block(x)
+
 
 class Encoder(nn.Module):
     def __init__(self, in_channels, dim_hidden, num_residual_layer, dim_residual_layer):
@@ -63,8 +57,9 @@ class Decoder(nn.Module):
         x = self.deconv_stack(x)
         return x
 
+
 class VQVAE(nn.Module):
-    def __init__(self, input_dim, hidden_dim, embedding_dim, codebook_size, num_residual_layer, dim_residual_layer):
+    def __init__(self, input_dim, hidden_dim, embedding_dim, codebook_size, num_residual_layer, dim_residual_layer, **kwargs):
         super().__init__()
 
         self.encoder = Encoder(input_dim, hidden_dim, num_residual_layer, dim_residual_layer)
