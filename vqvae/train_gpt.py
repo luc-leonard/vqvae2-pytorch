@@ -1,17 +1,11 @@
 import glob
-from pathlib import Path
 
 import torch
-from PIL import Image
-from torch.utils.data import Dataset, DataLoader
-from torchvision.datasets import DatasetFolder
-from torchvision.transforms import Compose, Resize, ToTensor
-from tqdm import tqdm
+from torch.utils.data import Dataset
+from torch.utils.tensorboard import SummaryWriter
 
-from gpt.gpt import GPT, GPT1Config, GPTConfig
+from gpt.gpt import GPT, GPTConfig
 from gpt.trainer import Trainer, TrainerConfig
-from vqvae import VQVAE
-from torch.nn import functional as F
 
 device = 'cuda'
 
@@ -46,19 +40,27 @@ class LatentsDataset(Dataset):
         return value[:- 1], value[1:]
 
 
+tb_writer = SummaryWriter('./runs/celeba_gpt/logs')
+def callback(step, model,  loss, optimizer):
+    tb_writer.add_scalar('loss', loss, step)
+    if step % 1000 == 0:
+       torch.save({'model': model.state_dict(), 'opt': optimizer.state_dict()}, f'./runs/celeba_gpt/gpt_model_checkpoint_{step}.pt')
+
 @torch.no_grad()
 def train_gpt(data_dir):
     dataset = LatentsDataset(root=data_dir)
     train_dataset, test_dataset = torch.utils.data.random_split(dataset, [int(0.8 * len(dataset)), len(dataset) - int(0.8 * len(dataset))])
+
     print(len(train_dataset))
     print(len(test_dataset))
     config = GPTConfig(vocab_size=512, block_size=32*32, n_head=8, n_layer=12, n_embd=512, embd_pdrop=0.0, resid_pdrop=0.0, attn_pdrop=0.0)
     model = GPT(config).to(device)
     print(model)
-    trainer = Trainer(model, test_dataset, test_dataset, config=TrainerConfig(
-        ckpt_path='./runs/celeba_gpt/',
+    trainer = Trainer(model, train_dataset, test_dataset, config=TrainerConfig(
+        ckpt_path='./runs/celeba_gpt/checkpoint.pt',
         batch_size=16,
-        max_epochs=1))
+        max_epochs=1),
+        callback=callback)
     trainer.train()
     trainer.save_checkpoint()
 

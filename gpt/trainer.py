@@ -38,11 +38,12 @@ class TrainerConfig:
 
 class Trainer:
 
-    def __init__(self, model, train_dataset, test_dataset, config):
+    def __init__(self, model, train_dataset, test_dataset, config, callback=None):
         self.model = model
         self.train_dataset = train_dataset
         self.test_dataset = test_dataset
         self.config = config
+        self.callback = callback
 
         # take over whatever gpus are on the system
         self.device = 'cpu'
@@ -83,7 +84,8 @@ class Trainer:
                     losses.append(loss.item())
 
                 if is_train:
-
+                    if self.callback is not None:
+                        self.callback(it, model, loss, optimizer)
                     # backprop and update the parameters
                     model.zero_grad()
                     loss.backward()
