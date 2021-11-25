@@ -1,0 +1,17 @@
+model:
+  target: vqgan.models.vqgan.VQModel
+  params:
+    codebook:
+      dim: 512
+      n_embeds: 512
+    encoder_decoder:
+      dimension: 2 # would be 1 for audio waveform ;)
+      resolution: 128
+      in_channels: 3 # RGB
+      out_channels: 3 # RGB
+
+      channels: 128 # first convolution out dim
+      channel_multiplier: [1, 1, 2, 4] # by how much to multiply the channel for each successive layer
+      z_channels: 512 # the last layer
+      num_res_blocks: 2 # number of residual blocks per layer
+      resolution_attention: [16]

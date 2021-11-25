@@ -103,7 +103,7 @@ class GPT(nn.Module):
 
     def __init__(self, config):
         super().__init__()
-
+        self.config = config
         # input embedding stem
         self.tok_emb = nn.Embedding(config.vocab_size, config.n_embd)
         self.pos_emb = nn.Parameter(torch.zeros(1, config.block_size, config.n_embd))

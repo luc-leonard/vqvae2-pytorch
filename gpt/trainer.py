@@ -57,10 +57,12 @@ class Trainer:
         logger.info("saving %s", self.config.ckpt_path)
         torch.save(raw_model.state_dict(), self.config.ckpt_path)
 
-    def train(self):
+    def train(self, base_step=0, optimizer_data=None):
         model, config = self.model, self.config
         raw_model = model.module if hasattr(self.model, "module") else model
         optimizer = raw_model.configure_optimizers(config)
+        if optimizer_data:
+            optimizer.load_state_dict(optimizer_data)
 
         def run_epoch(split):
             is_train = split == 'train'
@@ -71,7 +73,7 @@ class Trainer:
                                 num_workers=config.num_workers)
 
             losses = []
-            pbar = tqdm(enumerate(loader), total=len(loader)) if is_train else enumerate(loader)
+            pbar = tqdm(enumerate(loader), total=len(loader))
             for it, (x, y) in pbar:
                 # place data on the correct device
                 x = x.to(self.device)
@@ -85,7 +87,7 @@ class Trainer:
 
                 if is_train:
                     if self.callback is not None:
-                        self.callback(it, model, loss, optimizer)
+                        self.callback(it + base_step, model, loss, optimizer)
                     # backprop and update the parameters
                     model.zero_grad()
                     loss.backward()

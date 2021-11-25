@@ -1,3 +1,4 @@
+import torch
 from torch import nn
 from vector_quantize_pytorch import VectorQuantize
 
@@ -59,21 +60,18 @@ class Decoder(nn.Module):
 
 
 class VQVAE(nn.Module):
-    def __init__(self, input_dim, hidden_dim, embedding_dim, codebook_size, num_residual_layer, dim_residual_layer, **kwargs):
+    def __init__(self, input_dim, hidden_dim, embedding_dim, codebook_size, num_residual_layers, dim_residual_layers, **ignore_kwargs):
         super().__init__()
 
-        self.encoder = Encoder(input_dim, hidden_dim, num_residual_layer, dim_residual_layer)
-        self.pre_vq_conv = nn.Conv2d(in_channels=hidden_dim,
-                                            out_channels=embedding_dim,
-                                            kernel_size=1,
-                                            stride=1)
+        self.encoder = Encoder(input_dim, hidden_dim, num_residual_layers, dim_residual_layers)
+        self.pre_vq_conv = nn.Conv2d(in_channels=hidden_dim, out_channels=embedding_dim, kernel_size=1, stride=1)
         self.vq = VectorQuantize(
             dim = embedding_dim,
             codebook_size = codebook_size,     # codebook size
             decay = 0.99,             # the exponential moving average decay, lower means the dictionary will change faster
             commitment = 0.25         # the weight on the commitment loss
         )
-        self.decoder = Decoder(input_dim, embedding_dim, num_residual_layer, dim_residual_layer)
+        self.decoder = Decoder(input_dim, embedding_dim, num_residual_layers, dim_residual_layers)
 
     def encode(self, x):
         z_e_x = self.pre_vq_conv(self.encoder(x))
@@ -90,3 +88,11 @@ class VQVAE(nn.Module):
         quantized_x, indices, commit_loss = self.vq(encoded_x)
         x_tilde = self.decoder(quantized_x.permute(0, 3, 1, 2))
         return commit_loss, x_tilde
+
+
+def load_vqvae(config, model_path):
+    data = torch.load(model_path, map_location='cpu')
+    print(config)
+    model = VQVAE(**config)
+    model.load_state_dict(data['model'])
+    return model

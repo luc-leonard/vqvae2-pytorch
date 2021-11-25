@@ -13,10 +13,12 @@ import torchvision.transforms as TF
 @click.command()
 @click.option("--checkpoint-path", "-c")
 @click.option("--vqvae-path", "-v")
-def generate(checkpoint_path, vqvae_path, device='cpu'):
+def generate(checkpoint_path, vqvae_path, device='cuda'):
     config = GPTConfig(vocab_size=512, block_size=32*32, n_head=8, n_layer=12, n_embd=512, embd_pdrop=0.0, resid_pdrop=0.0, attn_pdrop=0.0)
     model = GPT(config).to(device)
-    model.load_state_dict(torch.load(checkpoint_path, map_location=device))
+
+    ckpt = torch.load(checkpoint_path, map_location=device)
+    model.load_state_dict(ckpt, strict=False)
 
     vqvae_state = torch.load(vqvae_path, map_location=device)
     vqvae_model = vqvae.VQVAE(**vqvae_state['hyper_parameters']).to(device)
