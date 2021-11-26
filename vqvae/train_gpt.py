@@ -53,7 +53,7 @@ def make_callback(config, name, the_vqvae):
     tb_writer = SummaryWriter(f'./runs/{name}/logs')
     Path(f'./runs /{name}').mkdir(parents=True, exist_ok=True)
 
-    def callback(step, model,  loss, optimizer):
+    def callback(step, model,  loss, optimizer, x, y):
         tb_writer.add_scalar('loss', loss, step)
         raw_model = model.module if hasattr(model, "module") else model
 
@@ -69,9 +69,29 @@ def make_callback(config, name, the_vqvae):
 
         if step % config.sample_every == 0:
             print('generating sample')
-            generated_latents = sample(raw_model, torch.tensor([random.randint(0, 512)]).unsqueeze(0).to(device), 1023).view(-1, 32, 32).to('cpu')
-            image = the_vqvae.decode(embedding(generated_latents, the_vqvae.vq._codebook.embed)).squeeze(0)
-            tb_writer.add_image('sample', image, step)
+
+            generated_latents_indices = sample(raw_model, torch.tensor([y[0, 0]]).unsqueeze(0).to(device), 1023, sample=True)\
+                .view(1, 32, 32)\
+                .to('cpu')
+
+            generated_latents = embedding(generated_latents_indices, the_vqvae.vq._codebook.embed)
+            upscaled_latents_indices = torch.nn.Upsample(size=(128, 128))(generated_latents_indices.unsqueeze(1).float()).squeeze(1).long()
+
+            upscaled_latents_indices = torch.stack([upscaled_latents_indices, upscaled_latents_indices, upscaled_latents_indices]).permute(1, 0, 2, 3)
+            image = the_vqvae.decode(generated_latents)
+            tb_writer.add_image('sample', torch.cat([image.squeeze(0), upscaled_latents_indices.squeeze(0)], 1), step)
+
+            y = torch.cat([y.cpu(), torch.tensor([16]).repeat(16).view(-1, 1)], dim=-1).view(-1, 32, 32)[0]
+
+            upscaled_y = torch.nn.Upsample(size=(128, 128))(y.unsqueeze(0).unsqueeze(0).float()).squeeze(0).squeeze(0).long()
+
+            embeds = embedding(y, the_vqvae.vq._codebook.embed)
+            real_image = the_vqvae.decode(embeds.unsqueeze(0)).squeeze(0)
+
+            upscaled_y = torch.stack(
+                [upscaled_y, upscaled_y, upscaled_y])
+            print(real_image.shape, upscaled_y.shape)
+            tb_writer.add_image('real', torch.cat([real_image, upscaled_y], dim=1), step)
     return callback
 
 
@@ -86,6 +106,7 @@ def make_gpt(checkpoint_path=None, config=None):
         model.load_state_dict(data['model'])
         opt_data = data['opt']
         base_step = data['step']
+
     return model, opt_data, base_step
 
 
@@ -106,13 +127,13 @@ def train_gpt(name, resume_from, config_path, vqvae_path):
     model, opt_data, base_step = make_gpt(resume_from, gpt_config)
     print(base_step)
 
-    the_vqvae = load_vqvae(config.model.vqvae.params, vqvae_path)
+    the_vqvae = load_vqvae(config.model.vqvae.params, vqvae_path).eval()
 
     trainer = Trainer(model, train_dataset, test_dataset, config=TrainerConfig(
         ckpt_path=f'./runs/{name}/checkpoint.pt',
-        batch_size=16,
+        batch_size=config.data.batch_size,
         learning_rate=config.training.learning_rate,
-        max_epochs=1),
+        max_epochs=10),
         callback=make_callback(config.training, name, the_vqvae))
     trainer.train(base_step, opt_data)
     trainer.save_checkpoint()

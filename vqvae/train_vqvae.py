@@ -15,6 +15,7 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 import click
 
+from utils.data import MyImageFolderDataset
 from vqvae import VQVAE
 
 device = 'cuda'
@@ -32,7 +33,7 @@ def train(name, model, dataloader, optimizer, base_step, num_training_updates, c
     for step in pbar:
         step = base_step + step
         try:
-            (image, _) = next(data_iterator)
+            image = next(data_iterator)
         except Exception as e:
             data_iterator = iter(dataloader)
             continue
@@ -71,7 +72,7 @@ def main(name, config_file, resume_from):
         current_step = state['step']
 
 
-    dataset = datasets.DatasetFolder(extensions=('png', 'jpg'), loader=Image.open, root=config.data.dir, transform=Compose([Resize((128, 128)), ToTensor()]))
+    dataset = MyImageFolderDataset(extensions=('png', 'jpg'), data_dir=config.data.dir, transform=Compose([Resize((128, 128)), ToTensor()]))
     dataloader = DataLoader(dataset, batch_size=config.data.batch_size, shuffle=True, num_workers=4)
     vqvae.train()
 

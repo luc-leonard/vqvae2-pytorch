@@ -20,7 +20,7 @@ def generate(checkpoint_path, vqvae_path, device='cuda'):
     ckpt = torch.load(checkpoint_path, map_location=device)
     model.load_state_dict(ckpt, strict=False)
 
-    vqvae_state = torch.load(vqvae_path, map_location=device)
+    vqvae_state = torch.load(vqvae_path, map_location=device).eval()
     vqvae_model = vqvae.VQVAE(**vqvae_state['hyper_parameters']).to(device)
     vqvae_model.load_state_dict(vqvae_state['model'])
 

@@ -19,8 +19,8 @@ def generate(vqvae_path, vqvae_config, latent_path, index, device='cpu'):
     config = OmegaConf.load(vqvae_config)
     model = load_vqvae(config.model.params, vqvae_path).to(device).eval()
     latents = torch.load(latent_path, map_location=device)
-
-    embeds = embedding(latents, model.vq._codebook.embed)[index]
+    print(latents[index])
+    embeds = embedding(latents[index], model.vq._codebook.embed)
     TF.ToPILImage()(model.decode(embeds.unsqueeze(0)).squeeze(0)).show()
 
 

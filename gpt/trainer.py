@@ -64,7 +64,7 @@ class Trainer:
         if optimizer_data:
             optimizer.load_state_dict(optimizer_data)
 
-        def run_epoch(split):
+        def run_epoch(split, base_step):
             is_train = split == 'train'
             model.train(is_train)
             data = self.train_dataset if is_train else self.test_dataset
@@ -74,7 +74,7 @@ class Trainer:
 
             losses = []
             pbar = tqdm(enumerate(loader), total=len(loader))
-            for it, (x, y) in pbar:
+            for _, (x, y) in pbar:
                 # place data on the correct device
                 x = x.to(self.device)
                 y = y.to(self.device)
@@ -87,7 +87,8 @@ class Trainer:
 
                 if is_train:
                     if self.callback is not None:
-                        self.callback(it + base_step, model, loss, optimizer)
+                        self.callback(base_step, model, loss, optimizer, x, y)
+                    base_step = base_step + 1
                     # backprop and update the parameters
                     model.zero_grad()
                     loss.backward()
@@ -111,18 +112,19 @@ class Trainer:
                         lr = config.learning_rate
 
                     # report progress
-                    pbar.set_description(f"epoch {epoch+1} iter {it}: train loss {loss.item():.5f}. lr {lr:e}")
+                    pbar.set_description(f"epoch {epoch+1} iter { base_step }: train loss {loss.item():.5f}. lr {lr:e}")
 
             if not is_train:
                 test_loss = float(np.mean(losses))
                 logger.info("test loss: %f", test_loss)
                 return test_loss
+            return base_step
 
         best_loss = float('inf')
         self.tokens = 0 # counter used for learning rate decay
         for epoch in range(config.max_epochs):
 
-            run_epoch('train')
+            base_step = run_epoch('train', base_step)
             if self.test_dataset is not None:
                 test_loss = run_epoch('test')
 
