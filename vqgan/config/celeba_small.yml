@@ -11,10 +11,10 @@ model:
       out_channels: 3 # RGB
 
       channels: 128 # first convolution out dim
-      channel_multiplier: [1, 1, 2, 2, 4] # by how much to multiply the channel for each successive layer
+      channel_multiplier: [1, 1, 2, 1] # by how much to multiply the channel for each successive layer
       z_channels: 256 # the last layer
       num_res_blocks: 2 # number of residual blocks per layer
-      resolution_attention: [16]
+      resolution_attention: []
 
 loss:
   codebook_loss: 1.0

@@ -54,20 +54,6 @@ def train(name, model, dataloader, optimizer, base_step, num_training_updates, c
         optimizer.step()
 
 
-# these will be used if we want to train the model from scratch
-# batch_size = 128
-# num_training_updates = 15000
-# input_dim = 3
-# hidden_dim = 256
-# dim_residual_layer = 32
-# num_residual_layer = 8
-# embedding_dim = 128
-# codebook_size = 512
-# commitment_cost = 0.25
-# decay = 0.99
-# learning_rate = 1e-3
-
-
 @click.command()
 @click.option('--name', default='celeba_2')
 @click.option('--config-file', default='', help='config file')
