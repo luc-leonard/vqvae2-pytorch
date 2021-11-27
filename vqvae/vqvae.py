@@ -60,10 +60,14 @@ class Decoder(nn.Module):
 
 
 class VQVAE(nn.Module):
-    def __init__(self, input_dim, hidden_dim, embedding_dim, codebook_size, num_residual_layers, dim_residual_layers, **ignore_kwargs):
+    def __init__(self, dimension, input_dim, hidden_dim, embedding_dim, codebook_size, num_residual_layers, dim_residual_layers, **ignore_kwargs):
         super().__init__()
 
-        self.encoder = Encoder(input_dim, hidden_dim, num_residual_layers, dim_residual_layers)
+        if dimension == 2:
+            self.encoder = Encoder(input_dim, hidden_dim, num_residual_layers, dim_residual_layers)
+        if dimension == 1:
+            ...
+            #self.encoder = Encoder1D(input_dim, hidden_dim, num_residual_layers, dim_residual_layers)
         self.pre_vq_conv = nn.Conv2d(in_channels=hidden_dim, out_channels=embedding_dim, kernel_size=1, stride=1)
         self.vq = VectorQuantize(
             dim = embedding_dim,
@@ -71,7 +75,11 @@ class VQVAE(nn.Module):
             decay = 0.99,             # the exponential moving average decay, lower means the dictionary will change faster
             commitment = 0.25         # the weight on the commitment loss
         )
-        self.decoder = Decoder(input_dim, embedding_dim, num_residual_layers, dim_residual_layers)
+        if dimension == 2:
+            self.decoder = Decoder(input_dim, embedding_dim, num_residual_layers, dim_residual_layers)
+        if dimension == 1:
+            ...
+            #self.decoder = Decoder1D(input_dim, embedding_dim, num_residual_layers, dim_residual_layers)
 
     def encode(self, x):
         z_e_x = self.pre_vq_conv(self.encoder(x))

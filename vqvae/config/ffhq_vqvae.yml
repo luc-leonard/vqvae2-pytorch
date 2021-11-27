@@ -1,0 +1,20 @@
+model:
+  params:
+    dimension: 2
+    embedding_dim: 128
+    codebook_size: 512
+    input_dim: 3 # RGB
+
+    hidden_dim: 256 # first convolution out dim
+    num_residual_layers: 8 # number of residual blocks per layer
+    dim_residual_layers: 32 # dimension of residual blocks
+
+training:
+  learning_rate: 0.001
+  decay: 0.99
+  commitment_cost: 0.25
+  total_steps: 15000
+
+data:
+  dir: /home/lleonard/Documents/datasets/img_align_celeba/
+  batch_size: 128

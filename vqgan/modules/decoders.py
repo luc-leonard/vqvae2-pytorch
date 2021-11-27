@@ -46,6 +46,9 @@ class MultiLayerDecoder2D(nn.Module):
         self.norm_out = Normalize(block_in)
         self.conv_out = nn.Conv2d(block_in, out_channels, kernel_size=3, stride=1, padding=1)
 
+    def get_last_layer(self):
+        return self.conv_out
+
     def forward(self, z):
         # assert z.shape[1:] == self.z_shape[1:]
         # z to block_in

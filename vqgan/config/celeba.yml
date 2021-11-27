@@ -19,7 +19,7 @@ model:
 loss:
   codebook_loss: 1.0
   pixel_loss: 1.0
-  perceptual_loss: 0.0
+  perceptual_loss: 0.8
 
 train:
   lr: 4.5e-6
@@ -27,6 +27,9 @@ train:
   save_every: 1000
   sample_every: 100
 
+
 data:
-  dir: /home/lleonard/Documents/datasets/img_align_celeba/
-  batch_size: 26
+  target: utils.data.MyImageFolderDataset
+  params:
+    data_dir: /home/lleonard/Documents/datasets/img_align_celeba/
+    resize: [128, 128]

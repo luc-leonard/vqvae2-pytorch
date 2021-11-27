@@ -126,7 +126,7 @@ class Trainer:
 
             base_step = run_epoch('train', base_step)
             if self.test_dataset is not None:
-                test_loss = run_epoch('test')
+                test_loss = run_epoch('test', 0)
 
             # supports early stopping based on the test loss, or just save always if no test set is provided
             good_model = self.test_dataset is None or test_loss < best_loss

@@ -1,0 +1,53 @@
+model:
+  target: vqgan.models.vqgan.VQModel
+  params:
+    codebook:
+      target: vector_quantize_pytorch.VectorQuantize
+      params:
+        dim: 512
+        codebook_size: 1024
+    encoder_decoder:
+      encoder_target: vqgan.modules.encoders.MultiLayerEncoder2D
+      decoder_target: vqgan.modules.decoders.MultiLayerDecoder2D
+      params:
+        resolution: 512
+        in_channels: 3 # RGB
+        out_channels: 3 # RGB
+
+        channels: 128 # first convolution out dim
+        channel_multiplier: [1, 1, 2, 2, 4] # by how much to multiply the channel for each successive layer
+        z_channels: 256 # the last layer
+        num_res_blocks: 2 # number of residual blocks per layer
+        resolution_attention: [32, 16]
+
+loss:
+  reconstruction:
+    target: torch.nn.MSELoss
+    factor: 1.0
+  codebook:
+    factor: 1.0
+  perceptual:
+    target: vqgan.modules.losses.LpipsLoss
+    factor: 0.8
+
+
+
+train:
+  lr: 4.5e-6
+  callbacks:
+    - target: vqgan.training.callbacks.ImageReconstructionTensorBoardCallback
+      params:
+        every: 100
+    - target: vqgan.training.callbacks.LossLogCallback
+      params:
+  total_steps: 150000
+  save_every: 500
+  sample_every: 50
+  batch_size: 2
+
+
+data:
+  target: utils.data.MyImageFolderDataset
+  params:
+    data_dir: /media/lleonard/big_slow_disk/datasets/ffhq/images1024x1024/
+    resize: [512, 512]

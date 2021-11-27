@@ -1,6 +1,7 @@
 model:
   vqvae:
     params:
+      dimension: 2
       embedding_dim: 128
       codebook_size: 512
       input_dim: 3 # RGB
@@ -20,7 +21,7 @@ model:
       attn_pdrop: 0.0
 
 training:
-  learning_rate: 3e-3
+  learning_rate: 3e-4
   save_every: 100
   sample_every: 100
 

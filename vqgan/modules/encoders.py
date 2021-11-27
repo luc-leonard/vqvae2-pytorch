@@ -5,6 +5,13 @@ from .attention import AttnBlock
 from .upsample import Downsample
 
 
+class Encoder1D(nn.Module):
+    def __init__(self, sampling_rate, in_channels, channels, z_channels, channel_multiplier, num_res_blocks, resolution_attention, **kwargs):
+        super(Encoder1D, self).__init__()
+        self.conv_in = nn.Conv1d(in_channels, channels, kernel_size=3, stride=1, padding=1)
+
+        self.down = nn.Sequential()
+
 class MultiLayerEncoder2D(nn.Module):
     def __init__(self, resolution, in_channels, channels, z_channels, channel_multiplier, num_res_blocks, resolution_attention, **kwargs):
         super(MultiLayerEncoder2D, self).__init__()
