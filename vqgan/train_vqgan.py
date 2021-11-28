@@ -1,28 +1,15 @@
 import click
-import numpy as np
 import torch
-import torchvision
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
-from torchvision import datasets
 from tqdm import tqdm
 
-import utils.data
 from utils.utils import get_class_from_str
 from vqgan.models.vqgan import make_model_from_config
-from PIL import Image
-import torchvision.transforms as TF
-import matplotlib.pyplot as plt
-import lpips
-
 from vqgan.modules.losses import CombinedLosses
 
 device = 'cuda'
 
-
-def make_loss(config):
-    return
 
 
 def make_callbacks(config, run_dir):
@@ -32,15 +19,12 @@ def make_callbacks(config, run_dir):
                                                                     **(callback_config.params or {})))
     return callbacks
 
-def train(name, model, dataloader, optimizer, base_step, config):
+
+def train(name, loss_fn, callbacks, model, dataloader, optimizer, base_step, config):
     pbar = tqdm(range(config.train.total_steps))
 
-    run_dir = f'./runs/{name}'
-    # tb_writer = SummaryWriter(f'./runs/{name}/logs')
-
-    loss_fn = CombinedLosses(config.loss, optimizer)
-    callbacks = make_callbacks(config, run_dir)
     data_iterator = iter(dataloader)
+    disc_turn = False
     for step in pbar:
         step = base_step + step
         try:
@@ -50,18 +34,28 @@ def train(name, model, dataloader, optimizer, base_step, config):
             continue
         if len(image.shape) == 3:
             image = image.unsqueeze(0)
+
         optimizer.zero_grad()
+        loss_fn.discriminator_opt.zero_grad()
+
         image = image.to(device)
         model_output = model(image)
-        loss, log, current_opt = loss_fn(model_output, image, step, model.get_last_layer().weight)
+        loss, log = loss_fn(model_output[0], image, model_output[1], 1 if disc_turn else 0, step, model.get_last_layer().weight)
         loss.backward()
-        current_opt.step()
-
+        if disc_turn:
+            loss_fn.discriminator_opt.step()
+        else:
+            optimizer.step()
+        disc_turn = not disc_turn
         for callback in callbacks:
             callback.on_step(model, image, image, model_output, log, step)
 
         if step % config.train.save_every == 0:
-            torch.save({'model': model.state_dict(), 'opt': optimizer.state_dict(), 'step': step}, "./runs/{}/vqgan_{}.pt".format(name, step))
+            torch.save({'model': model.state_dict(),
+                        'opt': optimizer.state_dict(),
+                        'discriminator': loss_fn.discriminator.state_dict(),
+                        'discriminator_opt': loss_fn.discriminator_opt.state_dict(),
+                        'step': step}, "./runs/{}/vqgan_{}.pt".format(name, step))
 
         pbar.set_description(str(round(loss.detach().item(), 4)))
 
@@ -78,21 +72,29 @@ def train(name, model, dataloader, optimizer, base_step, config):
 def main(name, config, resume_from, epochs):
     config = OmegaConf.load(config)
     model = make_model_from_config(config.model).to(device)
+    loss_fn = CombinedLosses(config.loss)
+
     optimizer = torch.optim.Adam(model.parameters(), lr=config.train.lr)
     base_step = 0
-
+    callbacks = make_callbacks(config, f'./runs/{name}/')
     if resume_from is not None:
         checkpoint = torch.load(resume_from)
         model.load_state_dict(checkpoint['model'])
         optimizer.load_state_dict(checkpoint['opt'])
         base_step = checkpoint['step']
+        loss_fn.discriminator.load_state_dict(checkpoint['discriminator'])
+        loss_fn.discriminator_opt.load_state_dict(checkpoint['discriminator_opt'])
+
 
     dataset = get_class_from_str(config.data.target)(**config.data.params)
     dataloader = DataLoader(dataset, batch_size=config.train.batch_size, shuffle=True, num_workers=1)
+
     for _ in range(epochs):
         print('.')
-        base_step = train(name, model, dataloader, optimizer, base_step, config)
+        base_step = train(name, loss_fn, callbacks, model, dataloader, optimizer, base_step, config)
 
 
 if __name__ == '__main__':
     main()
+
+

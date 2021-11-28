@@ -1,8 +1,9 @@
+import numpy as np
 from torch import nn
-from .resnet import ResnetBlock
-from .attention import AttnBlock
-from .upsample import Upsample
-from .utils import Normalize, nonlinearity
+from ..resnet import ResnetBlock
+from ..attention import AttnBlock
+from ..upsample import Upsample
+from ..utils import Normalize, nonlinearity
 
 class MultiLayerDecoder2D(nn.Module):
     def __init__(self, *, resolution, out_channels, channels, z_channels, channel_multiplier, num_res_blocks, resolution_attention, **kwargs):
@@ -24,17 +25,22 @@ class MultiLayerDecoder2D(nn.Module):
         self.up = nn.ModuleList()
 
         curr_res = resolution // 2 ** (self.num_layers - 1)
+        self.z_shape = (1, z_channels, curr_res, curr_res)
+        print("Working with z of shape {} = {} dimensions.".format(
+            self.z_shape, np.prod(self.z_shape)))
+
         for i_level in reversed(range(self.num_layers)):
-            print(f'resolution for layer {i_level}: {curr_res}')
             block = nn.ModuleList()
             attn = nn.ModuleList()
             block_out = channels * channel_multiplier[i_level]
             for i_block in range(self.num_res_blocks + 1):
+
                 block.append(ResnetBlock(in_channels=block_in,
                                          out_channels=block_out))
                 block_in = block_out
                 if curr_res in resolution_attention:
                     attn.append(AttnBlock(block_in))
+
             up = nn.Module()
             up.block = block
             up.attention = attn

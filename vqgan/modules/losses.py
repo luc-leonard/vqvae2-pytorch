@@ -30,25 +30,25 @@ def vanilla_d_loss(logits_real, logits_fake):
 
 
 class CombinedLosses(nn.Module):
-    def __init__(self, loss_config, optimizer):
+    def __init__(self, loss_config):
         super(CombinedLosses, self).__init__()
         self.reconstruction_loss = get_class_from_str(loss_config.reconstruction.target)()
         self.reconstruction_loss_factor = loss_config.reconstruction.factor
 
         self.codebook_loss_factor = loss_config.codebook.factor
 
-        self.perceptual_loss = get_class_from_str(loss_config.perceptual.target)()
+        self.perceptual_loss = get_class_from_str(loss_config.perceptual.target)(**loss_config.perceptual.params)
         self.perceptual_loss_factor = loss_config.perceptual.factor
 
-        self.generator_optimizer = optimizer
-        self.discriminator = None
+        self.discriminator = nn.Module() # empty module
         if 'discriminator' in loss_config:
-            self.discriminator = get_class_from_str(loss_config.discriminator.target)(**loss_config.discriminator.params)
+            self.discriminator = get_class_from_str(loss_config.discriminator.target)(**loss_config.discriminator.params)\
+                .to(loss_config.discriminator.device)
+            self.discriminator_device = loss_config.discriminator.device
             self.discriminator_factor = loss_config.discriminator.factor
             self.disc_loss = hinge_d_loss
             self.discriminator_iter_start = loss_config.discriminator.iter_start
-            self.disc_step = False
-
+        self.discriminator_opt = torch.optim.Adam(self.discriminator.parameters(), lr=4.5e-6, betas=(0.5, 0.999))
 
     def calculate_adaptive_weight(self, nll_loss, g_loss, last_layer=None):
         if last_layer is not None:
@@ -64,11 +64,8 @@ class CombinedLosses(nn.Module):
         return d_weight
 
 
-    def forward(self, model_output, target, global_step, last_layer=None):
-        reconstructed = model_output[1]
-        codebook_loss = model_output[0] #already calculated in the forward pass of the model
-
-        r_loss = self.reconstruction_loss(reconstructed, target)
+    def forward(self, codebook_loss, target, reconstructed, optimizer_idx, global_step, last_layer=None):
+        r_loss = torch.abs(target.contiguous() - reconstructed.contiguous())
         p_loss = self.perceptual_loss(target.contiguous(), reconstructed.contiguous())
         nll_loss = torch.mean(r_loss + self.perceptual_loss_factor * p_loss)
 
@@ -81,18 +78,17 @@ class CombinedLosses(nn.Module):
                    "r_loss": r_loss.detach().mean(),
                    "p_loss": p_loss.detach().mean(),
                    }
-            return loss, log, self.generator_optimizer
-        self.disc_step = not self.disc_step
+            return loss, log
 
         # if we have a GAN, things are more complicated
-        if not self.disc_step:
-            logits_fake = self.discriminator(reconstructed.contiguous())
+        if optimizer_idx == 0:
+            logits_fake = self.discriminator(reconstructed.to(self.discriminator_device).contiguous())
             g_loss = -torch.mean(logits_fake)
 
             d_weight = self.calculate_adaptive_weight(nll_loss, g_loss, last_layer=last_layer)
             disc_factor = adopt_weight(self.discriminator_factor, global_step, threshold=self.discriminator_iter_start)
 
-            loss = nll_loss * self.reconstruction_loss_factor + \
+            loss = nll_loss + \
                    (d_weight * disc_factor * g_loss) + \
                    (self.codebook_loss_factor * codebook_loss.mean())
 
@@ -105,10 +101,10 @@ class CombinedLosses(nn.Module):
                    "disc_factor": torch.tensor(disc_factor),
                    "g_loss": g_loss.detach().mean(),
                    }
-            return loss, log, self.generator_optimizer
+            return loss, log
         else:
-            logits_real = self.discriminator(target.contiguous().detach())
-            logits_fake = self.discriminator(reconstructed.contiguous().detach())
+            logits_real = self.discriminator(target.to(self.discriminator_device).detach())
+            logits_fake = self.discriminator(reconstructed.to(self.discriminator_device).detach())
             disc_factor = adopt_weight(self.discriminator_factor, global_step, threshold=self.discriminator_iter_start)
             loss = disc_factor * self.disc_loss(logits_real, logits_fake)
 
@@ -116,23 +112,13 @@ class CombinedLosses(nn.Module):
                    "logits_real": logits_real.detach().mean(),
                    "logits_fake": logits_fake.detach().mean()
                    }
-            return loss, log, self.discriminator.opt
+            return loss, log
 
 
 class LpipsLoss(nn.Module):
-    def __init__(self, factor=1.0, perceptual_model='alex', device='cuda'):
+    def __init__(self, perceptual_model='vgg', device='cuda'):
         super(LpipsLoss, self).__init__()
-        self.iner_loss = lpips.LPIPS().to(device)
+        self.iner_loss = lpips.LPIPS(net=perceptual_model).to(device)
 
     def forward(self, reconstructed, target):
-        return self.iner_loss(reconstructed, target, normalize=True)
-
-
-class DiscriminatorLoss(nn.Module):
-    def __init__(self, learning_rate, factor=1.0, device='cuda'):
-        super(DiscriminatorLoss, self).__init__()
-        self.discriminator = NLayerDiscriminator().to(device)
-        self.opt = torch.optim.Adam(self.discriminator.parameters(), lr=learning_rate, betas=(0.5, 0.999))
-
-    def forward(self, model_output):
-        return self.discriminator(model_output)
+        return self.iner_loss(reconstructed, target)

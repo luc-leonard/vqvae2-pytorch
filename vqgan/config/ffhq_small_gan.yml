@@ -10,12 +10,12 @@ model:
       encoder_target: vqgan.modules.encoders.encoders.MultiLayerEncoder2D
       decoder_target: vqgan.modules.decoders.decoders.MultiLayerDecoder2D
       params:
-        resolution: 512
+        resolution: 256
         in_channels: 3 # RGB
         out_channels: 3 # RGB
-
-        channels: 64 # first convolution out dim
-        channel_multiplier: [1, 2, 2, 1, 4] # by how much to multiply the channel for each successive layer
+        attention_target: vqgan.modules.attention.AttnBlock
+        channels: 128 # first convolution out dim
+        channel_multiplier: [1, 2, 2, 4] # by how much to multiply the channel for each successive layer
         z_channels: 256 # the last layer
         num_res_blocks: 2 # number of residual blocks per layer
         resolution_attention: [32]
@@ -35,8 +35,8 @@ loss:
     target: vqgan.models.discriminator.NLayerDiscriminator
     device: cuda
     params:
-      ndf: 32
-      n_layers: 2
+      ndf: 64
+      n_layers: 3
       use_actnorm: False
     factor: 1.0
     iter_start: 10000
@@ -49,17 +49,16 @@ train:
     - target: vqgan.training.callbacks.ImageReconstructionTensorBoardCallback
       params:
         every: 100
-        size: 512
     - target: vqgan.training.callbacks.LossLogCallback
       params:
   total_steps: 150000
   save_every: 1000
   sample_every: 100
-  batch_size: 1
+  batch_size: 2
 
 
 data:
   target: utils.data.MyImageFolderDataset
   params:
     data_dir: /media/lleonard/big_slow_disk/datasets/ffhq/images1024x1024/
-    resize: [512, 512]
+    resize: [256, 256]

@@ -20,20 +20,20 @@ class LossLogCallback:
 
 
 class ImageReconstructionTensorBoardCallback:
-    def __init__(self, run_dir, every):
+    def __init__(self, run_dir, every, size=256):
         self.tb_writer = SummaryWriter(run_dir + '/logs/')
         self.every = every
+        self.size = size
 
     @torch.no_grad()
     def on_step(self, model, x, y, model_output, losses, step):
         if step % self.every == 0:
             sample = x[0].unsqueeze(0)
-            output = model_output[1][0].unsqueeze(0)
+            output = (model_output[1][0].unsqueeze(0) + 1) / 2
             latents, latents_indices, _ = model.encode(sample)
-            latents_indices = nn.Upsample(size=(512, 512))(latents_indices.unsqueeze(1).float()).squeeze(1).long()
-
+            latents_indices = nn.Upsample(size=(self.size, self.size))(latents_indices.unsqueeze(0).float()).long().squeeze(0)
             latents_indices = torch.stack([latents_indices, latents_indices, latents_indices]).permute(1, 0, 2, 3)
-
+            sample = (sample + 1) / 2
             self.tb_writer.add_image('reconstruction',
                                      torchvision.utils.make_grid(torch.cat([sample, output, latents_indices]), nrow=13),
                                      step)
