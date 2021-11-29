@@ -35,24 +35,28 @@ def train(name, loss_fn, callbacks, model, dataloader, optimizer, base_step, con
         if len(image.shape) == 3:
             image = image.unsqueeze(0)
 
-        optimizer.zero_grad()
+
         loss_fn.discriminator_opt.zero_grad()
 
         image = image.to(device)
-        model_output = model(image)
+
+
+
 
         # generator
-        loss, log = loss_fn(model_output[0], image, model_output[1], 0, step, model.get_last_layer().weight)
+        loss_fn.discriminator_opt.zero_grad()
+        optimizer.zero_grad()
+        model_output = model(image)
+        loss, log = loss_fn(model_output[0], image, model_output[1], 1 if disc_turn else 0, step, model.get_last_layer().weight)
         loss.backward()
-        optimizer.step()
 
-        #discriminator
-        loss, log2 = loss_fn(model_output[0], image, model_output[1], 1, step, model.get_last_layer().weight)
-        loss.backward()
-        loss_fn.discriminator_opt.step()
+        if disc_turn:
+            loss_fn.discriminator_opt.step()
+        else:
+            optimizer.step()
 
         for callback in callbacks:
-            callback.on_step(model, image, image, model_output, {**log, **log2}, step)
+            callback.on_step(model, image, image, model_output, log, step)
 
         if step % config.train.save_every == 0:
             torch.save({'model': model.state_dict(),
@@ -78,7 +82,12 @@ def main(name, config, resume_from, epochs):
     model = make_model_from_config(config.model).to(device)
     loss_fn = VQLPIPSWithDiscriminator(10_000)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=config.train.lr)
+    optimizer = torch.optim.Adam(list(model.encoder.parameters()) +
+                     list(model.decoder.parameters()) +
+                     list(model.vq.parameters()) +
+                     list(model.quant_conv.parameters()) +
+                     list(model.post_quant_conv.parameters()),
+                     lr=config.train.lr * config.train.batch_size, betas=(0.5, 0.9))
     base_step = 0
     callbacks = make_callbacks(config, f'./runs/{name}/')
     if resume_from is not None:

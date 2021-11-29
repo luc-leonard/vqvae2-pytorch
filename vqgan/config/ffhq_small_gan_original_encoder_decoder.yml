@@ -4,7 +4,7 @@ model:
     codebook:
       target: vector_quantize_pytorch.VectorQuantize
       params:
-        dim: 512
+        dim: 256
         codebook_size: 1024
     encoder_decoder:
       encoder_target: vqgan.modules.encoders.legacy.Encoder
@@ -54,7 +54,7 @@ train:
   total_steps: 150000
   save_every: 1000
   sample_every: 100
-  batch_size: 2
+  batch_size: 4
 
 
 data:
