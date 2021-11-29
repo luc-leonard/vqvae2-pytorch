@@ -2,7 +2,7 @@
 from torch import nn
 
 from utils.utils import get_class_from_str
-from vqgan.modules.vector_quantizer import VectorQuantizer2
+from vqgan.modules.quantizers.vector_quantizer import VectorQuantizer
 
 
 class VQModel(nn.Module):
@@ -12,7 +12,7 @@ class VQModel(nn.Module):
         self.quant_conv = nn.Conv2d(encoder_decoder.params.z_channels, codebook.params.dim, kernel_size=1)
 
        #  self.vq = get_class_from_str(codebook.target)(**codebook.params)
-        self.vq = VectorQuantizer2(codebook.params.codebook_size, codebook.params.dim, beta=0.25, remap=None, sane_index_shape=True)
+        self.vq = VectorQuantizer(codebook.params.codebook_size, codebook.params.dim, beta=0.25, remap=None, sane_index_shape=True)
         self.post_quant_conv = nn.Conv2d(codebook.params.dim, encoder_decoder.params.z_channels, kernel_size=1)
 
         self.decoder = get_class_from_str(encoder_decoder.decoder_target)(**encoder_decoder.params)
