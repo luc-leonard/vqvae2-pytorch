@@ -20,6 +20,16 @@ def make_callbacks(config, run_dir):
     return callbacks
 
 
+def do_step(optimizer, loss_fn, model, image, step, optimizer_idx, callbacks):
+    optimizer.zero_grad()
+    model_output = model(image)
+    loss, log = loss_fn(model_output[0], image, model_output[1], optimizer_idx, step, model.get_last_layer().weight)
+    loss.backward()
+    optimizer.step()
+    for callback in callbacks:
+        callback.on_step(model, image, image, model_output, log, step)
+
+
 def train(name, loss_fn, callbacks, model, dataloader, optimizer, base_step, config):
     pbar = tqdm(range(config.train.total_steps))
 
@@ -36,27 +46,14 @@ def train(name, loss_fn, callbacks, model, dataloader, optimizer, base_step, con
             image = image.unsqueeze(0)
 
 
-        loss_fn.discriminator_opt.zero_grad()
 
         image = image.to(device)
-
-
-
-
-        # generator
-        loss_fn.discriminator_opt.zero_grad()
-        optimizer.zero_grad()
-        model_output = model(image)
-        loss, log = loss_fn(model_output[0], image, model_output[1], 1 if disc_turn else 0, step, model.get_last_layer().weight)
-        loss.backward()
-
         if disc_turn:
-            loss_fn.discriminator_opt.step()
+            do_step(loss_fn.discriminator_opt, loss_fn, model, image, step, 1, callbacks)
         else:
-            optimizer.step()
+            do_step(optimizer, loss_fn, model, image, step, 0, callbacks)
+        disc_turn = not disc_turn
 
-        for callback in callbacks:
-            callback.on_step(model, image, image, model_output, log, step)
 
         if step % config.train.save_every == 0:
             torch.save({'model': model.state_dict(),
@@ -65,10 +62,13 @@ def train(name, loss_fn, callbacks, model, dataloader, optimizer, base_step, con
                         'discriminator_opt': loss_fn.discriminator_opt.state_dict(),
                         'step': step}, "./runs/{}/vqgan_{}.pt".format(name, step))
 
-        pbar.set_description(str(round(loss.detach().item(), 4)))
+        #pbar.set_description(str(round(loss.detach().item(), 4)))
 
-
-    torch.save({'model': model.state_dict(), 'opt': optimizer.state_dict(), 'step': step}, "./runs/{}/vqgan_{}.pt".format(name, step))
+    torch.save({'model': model.state_dict(),
+                'opt': optimizer.state_dict(),
+                'discriminator': loss_fn.discriminator.state_dict(),
+                'discriminator_opt': loss_fn.discriminator_opt.state_dict(),
+                'step': step}, "./runs/{}/vqgan_{}.pt".format(name, step))
     return step
 
 
@@ -80,8 +80,8 @@ def train(name, loss_fn, callbacks, model, dataloader, optimizer, base_step, con
 def main(name, config, resume_from, epochs):
     config = OmegaConf.load(config)
     model = make_model_from_config(config.model).to(device)
-    loss_fn = VQLPIPSWithDiscriminator(10_000)
-
+    #loss_fn = VQLPIPSWithDiscriminator(10_000)
+    loss_fn = CombinedLosses(config.loss)
     optimizer = torch.optim.Adam(list(model.encoder.parameters()) +
                      list(model.decoder.parameters()) +
                      list(model.vq.parameters()) +

@@ -63,7 +63,7 @@ class ResnetBlock1D(nn.Module):
 
 class ResnetBlock(nn.Module):
     def __init__(self, *, in_channels, out_channels=None, conv_shortcut=False,
-                 dropout, temb_channels=512):
+                 dropout=0.0, temb_channels=512):
         super().__init__()
         self.in_channels = in_channels
         out_channels = in_channels if out_channels is None else out_channels
@@ -100,7 +100,7 @@ class ResnetBlock(nn.Module):
                                                     stride=1,
                                                     padding=0)
 
-    def forward(self, x, temb):
+    def forward(self, x, temb=None):
         h = x
         h = self.norm1(h)
         h = nonlinearity(h)

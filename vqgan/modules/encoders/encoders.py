@@ -104,7 +104,7 @@ class MultiLayerEncoder2D(nn.Module):
             down.block = block
             down.attention = attention
             if level != self.num_layers - 1:
-                down.downsample = Downsample(in_channels=block_out, with_conv=False)
+                down.downsample = Downsample(in_channels=block_out, with_conv=True)
                 current_resolution //= 2
             self.down.append(down)
 

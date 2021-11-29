@@ -30,7 +30,9 @@ class ImageReconstructionTensorBoardCallback:
     def on_step(self, model, x, y, model_output, losses, step):
         if step % self.every == 0:
             sample = x[0].unsqueeze(0)
-            output = (model_output[1][0].unsqueeze(0) + 1) / 2 # [-1, 1] => [0, 1]
+            output = model_output[1][0].unsqueeze(0)
+            output = torch.clamp(output, -1, 1)
+            output = (output + 1) / 2 # [-1, 1] => [0, 1]
             latents, latents_indices, _ = model.encode(sample)
             latents_indices = nn.Upsample(size=(self.size, self.size))(latents_indices.unsqueeze(0).float()).long().squeeze(0)
             latents_indices = torch.stack([latents_indices, latents_indices, latents_indices]).permute(1, 0, 2, 3)

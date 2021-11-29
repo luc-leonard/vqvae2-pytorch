@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from lpips import LPIPS
 
-from vqgan.models.discriminator import NLayerDiscriminator
+from vqgan.models.discriminator import NLayerDiscriminator, weights_init
 
 
 class DummyLoss(nn.Module):
@@ -47,9 +47,9 @@ class VQLPIPSWithDiscriminator(nn.Module):
                                                  n_layers=disc_num_layers,
                                                  use_actnorm=use_actnorm,
                                                  ndf=disc_ndf
-                                                 ).to('cuda:0')#.apply(weights_init)
+                                                 ).to('cuda:0').apply(weights_init)
         self.discriminator_iter_start = disc_start
-        self.discriminator_opt = torch.optim.Adam(self.discriminator.parameters(), lr=4.5e-6 * 2, betas=(0.5, 0.999))
+        self.discriminator_opt = torch.optim.Adam(self.discriminator.parameters(), lr=4.5e-6 * 4, betas=(0.5, 0.9))
         if disc_loss == "hinge":
             self.disc_loss = hinge_d_loss
         elif disc_loss == "vanilla":

@@ -30,7 +30,7 @@ loss:
     target: vqgan.modules.losses.LpipsLoss
     params:
       perceptual_model: vgg
-    factor: 0.8
+    factor: 1.0
   discriminator:
     target: vqgan.models.discriminator.NLayerDiscriminator
     device: cuda
@@ -48,12 +48,11 @@ train:
   callbacks:
     - target: vqgan.training.callbacks.ImageReconstructionTensorBoardCallback
       params:
-        every: 100
+        every: 50
     - target: vqgan.training.callbacks.LossLogCallback
       params:
   total_steps: 150000
-  save_every: 1000
-  sample_every: 100
+  save_every: 500
   batch_size: 4
 
 

@@ -53,8 +53,7 @@ train:
       params:
   total_steps: 150000
   save_every: 1000
-  sample_every: 100
-  batch_size: 2
+  batch_size: 4
 
 
 data:
