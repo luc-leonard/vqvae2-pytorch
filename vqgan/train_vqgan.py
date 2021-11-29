@@ -6,10 +6,10 @@ from tqdm import tqdm
 
 from utils.utils import get_class_from_str
 from vqgan.models.vqgan import make_model_from_config
+from vqgan.modules.loss.vqperceptual import VQLPIPSWithDiscriminator
 from vqgan.modules.losses import CombinedLosses
 
 device = 'cuda'
-
 
 
 def make_callbacks(config, run_dir):
@@ -40,15 +40,19 @@ def train(name, loss_fn, callbacks, model, dataloader, optimizer, base_step, con
 
         image = image.to(device)
         model_output = model(image)
-        loss, log = loss_fn(model_output[0], image, model_output[1], 1 if disc_turn else 0, step, model.get_last_layer().weight)
+
+        # generator
+        loss, log = loss_fn(model_output[0], image, model_output[1], 0, step, model.get_last_layer().weight)
         loss.backward()
-        if disc_turn:
-            loss_fn.discriminator_opt.step()
-        else:
-            optimizer.step()
-        disc_turn = not disc_turn
+        optimizer.step()
+
+        #discriminator
+        loss, log2 = loss_fn(model_output[0], image, model_output[1], 1, step, model.get_last_layer().weight)
+        loss.backward()
+        loss_fn.discriminator_opt.step()
+
         for callback in callbacks:
-            callback.on_step(model, image, image, model_output, log, step)
+            callback.on_step(model, image, image, model_output, {**log, **log2}, step)
 
         if step % config.train.save_every == 0:
             torch.save({'model': model.state_dict(),
@@ -72,7 +76,7 @@ def train(name, loss_fn, callbacks, model, dataloader, optimizer, base_step, con
 def main(name, config, resume_from, epochs):
     config = OmegaConf.load(config)
     model = make_model_from_config(config.model).to(device)
-    loss_fn = CombinedLosses(config.loss)
+    loss_fn = VQLPIPSWithDiscriminator(10_000)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=config.train.lr)
     base_step = 0

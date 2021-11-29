@@ -4,7 +4,7 @@ import torch
 from vqgan.modules.utils import Normalize
 
 
-class LegacyAttnBlock(nn.Module):
+class AttnBlock(nn.Module):
     def __init__(self, in_channels):
         super().__init__()
         self.in_channels = in_channels
@@ -59,7 +59,7 @@ class LegacyAttnBlock(nn.Module):
         return x+h_
 
 
-class AttnBlock(nn.Module):
+class TorchAttnBlock(nn.Module):
     def __init__(self, in_channels):
         super().__init__()
         self.attn = nn.MultiheadAttention(in_channels, num_heads=1, batch_first=True)

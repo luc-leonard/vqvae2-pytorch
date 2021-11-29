@@ -5,13 +5,13 @@ from ..attention import AttnBlock
 from ..upsample import Upsample
 from ..utils import Normalize, nonlinearity
 
+
 class MultiLayerDecoder2D(nn.Module):
     def __init__(self, *, resolution, out_channels, channels, z_channels, channel_multiplier, num_res_blocks, resolution_attention, **kwargs):
         super(MultiLayerDecoder2D, self).__init__()
 
         self.num_layers = len(channel_multiplier)
         self.num_res_blocks = num_res_blocks
-
 
         block_in = channels * channel_multiplier[-1]
 

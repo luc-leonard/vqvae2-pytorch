@@ -7,8 +7,8 @@ model:
         dim: 512
         codebook_size: 1024
     encoder_decoder:
-      encoder_target: vqgan.modules.encoders.original_encoder.Encoder
-      decoder_target: vqgan.modules.decoders.original_decoder.Decoder
+      encoder_target: vqgan.modules.encoders.legacy.Encoder
+      decoder_target: vqgan.modules.decoders.legacy.Decoder
       params:
         resolution: 256
         in_channels: 3 # RGB
@@ -28,11 +28,16 @@ loss:
     factor: 1.0
   perceptual:
     target: vqgan.modules.losses.LpipsLoss
+    params:
+      perceptual_model: vgg
     factor: 0.8
   discriminator:
-    target: vqgan.modules.losses.DiscriminatorLoss
+    target: vqgan.models.discriminator.NLayerDiscriminator
+    device: cuda
     params:
-      learning_rate: 4.5e-6
+      ndf: 64
+      n_layers: 3
+      use_actnorm: False
     factor: 1.0
     iter_start: 10000
 
@@ -49,7 +54,7 @@ train:
   total_steps: 150000
   save_every: 1000
   sample_every: 100
-  batch_size: 4
+  batch_size: 2
 
 
 data:

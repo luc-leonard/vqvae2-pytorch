@@ -49,6 +49,7 @@ class VQLPIPSWithDiscriminator(nn.Module):
                                                  ndf=disc_ndf
                                                  ).to('cuda:0')#.apply(weights_init)
         self.discriminator_iter_start = disc_start
+        self.discriminator_opt = torch.optim.Adam(self.discriminator.parameters(), lr=4.5e-6, betas=(0.5, 0.999))
         if disc_loss == "hinge":
             self.disc_loss = hinge_d_loss
         elif disc_loss == "vanilla":

@@ -44,7 +44,6 @@ class CombinedLosses(nn.Module):
         if 'discriminator' in loss_config:
             self.discriminator = get_class_from_str(loss_config.discriminator.target)(**loss_config.discriminator.params)\
                 .to(loss_config.discriminator.device)
-            self.discriminator_device = loss_config.discriminator.device
             self.discriminator_factor = loss_config.discriminator.factor
             self.disc_loss = hinge_d_loss
             self.discriminator_iter_start = loss_config.discriminator.iter_start
@@ -82,7 +81,7 @@ class CombinedLosses(nn.Module):
 
         # if we have a GAN, things are more complicated
         if optimizer_idx == 0:
-            logits_fake = self.discriminator(reconstructed.to(self.discriminator_device).contiguous())
+            logits_fake = self.discriminator(reconstructed.contiguous())
             g_loss = -torch.mean(logits_fake)
 
             d_weight = self.calculate_adaptive_weight(nll_loss, g_loss, last_layer=last_layer)
@@ -103,8 +102,9 @@ class CombinedLosses(nn.Module):
                    }
             return loss, log
         else:
-            logits_real = self.discriminator(target.to(self.discriminator_device).detach())
-            logits_fake = self.discriminator(reconstructed.to(self.discriminator_device).detach())
+            logits_real = self.discriminator(target.detach())
+            logits_fake = self.discriminator(reconstructed.detach())
+
             disc_factor = adopt_weight(self.discriminator_factor, global_step, threshold=self.discriminator_iter_start)
             loss = disc_factor * self.disc_loss(logits_real, logits_fake)
 
