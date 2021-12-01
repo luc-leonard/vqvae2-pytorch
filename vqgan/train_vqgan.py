@@ -27,26 +27,19 @@ def do_step(optimizer, loss_fn, model, image, step, optimizer_idx, callbacks):
     loss.backward()
     optimizer.step()
     for callback in callbacks:
-        callback.on_step(model, image, image, model_output, log, step)
+        callback.on_step('train', model, image, image, model_output, log, step)
 
 
-def train(name, loss_fn, callbacks, model, dataloader, optimizer, base_step, config):
-    pbar = tqdm(range(config.train.total_steps))
+def epoch(name, loss_fn, callbacks, model, dataloaders, optimizer, base_step, config):
 
-    data_iterator = iter(dataloader)
+    train_dl = dataloaders[0]
+    test_dl = dataloaders[1]
+
     disc_turn = False
-    for step in pbar:
-        step = base_step + step
-        try:
-            (image, _) = next(data_iterator)
-        except Exception as e:
-            data_iterator = iter(dataloader)
-            continue
+    for i, (image, _) in tqdm(enumerate(train_dl), total=len(train_dl)):
+        step = base_step + i
         if len(image.shape) == 3:
             image = image.unsqueeze(0)
-
-
-
         image = image.to(device)
         if disc_turn:
             do_step(loss_fn.discriminator_opt, loss_fn, model, image, step, 1, callbacks)
@@ -62,13 +55,22 @@ def train(name, loss_fn, callbacks, model, dataloader, optimizer, base_step, con
                         'discriminator_opt': loss_fn.discriminator_opt.state_dict(),
                         'step': step}, "./runs/{}/vqgan_{}.pt".format(name, step))
 
-        #pbar.set_description(str(round(loss.detach().item(), 4)))
 
     torch.save({'model': model.state_dict(),
                 'opt': optimizer.state_dict(),
                 'discriminator': loss_fn.discriminator.state_dict(),
                 'discriminator_opt': loss_fn.discriminator_opt.state_dict(),
                 'step': step}, "./runs/{}/vqgan_{}.pt".format(name, step))
+
+    print("Evaluating...")
+    for image in tqdm(test_dl, total=len(test_dl)):
+        if len(image.shape) == 3:
+            image = image.unsqueeze(0)
+        image = image.to(device)
+        model_output = model(image)
+        _, log = loss_fn(model_output[0], image, model_output[1], 0, step, model.get_last_layer().weight)
+        for callback in callbacks:
+            callback.on_step('valid', model, image, image, model_output, log, step)
     return step
 
 
@@ -80,14 +82,15 @@ def train(name, loss_fn, callbacks, model, dataloader, optimizer, base_step, con
 def main(name, config, resume_from, epochs):
     config = OmegaConf.load(config)
     model = make_model_from_config(config.model).to(device)
-    #loss_fn = VQLPIPSWithDiscriminator(10_000)
     loss_fn = CombinedLosses(config.loss)
+
     optimizer = torch.optim.Adam(list(model.encoder.parameters()) +
                      list(model.decoder.parameters()) +
                      list(model.vq.parameters()) +
                      list(model.quant_conv.parameters()) +
                      list(model.post_quant_conv.parameters()),
                      lr=config.train.lr * config.train.batch_size, betas=(0.5, 0.9))
+
     base_step = 0
     callbacks = make_callbacks(config, f'./runs/{name}/')
     if resume_from is not None:
@@ -100,11 +103,13 @@ def main(name, config, resume_from, epochs):
 
 
     dataset = get_class_from_str(config.data.target)(**config.data.params)
-    dataloader = DataLoader(dataset, batch_size=config.train.batch_size, shuffle=True, num_workers=1)
+    train_dataset, test_dataset = torch.utils.data.random_split(dataset, [len(dataset) - len(dataset) // 10, len(dataset) // 10])
+    train_dataloader = DataLoader(train_dataset, batch_size=config.train.batch_size, shuffle=True, num_workers=4)
+    test_dataloader = DataLoader(test_dataset, batch_size=config.train.batch_size, shuffle=True, num_workers=4)
 
     for _ in range(epochs):
         print('.')
-        base_step = train(name, loss_fn, callbacks, model, dataloader, optimizer, base_step, config)
+        base_step = epoch(name, loss_fn, callbacks, model, [train_dataloader, test_dataloader], optimizer, base_step, config)
 
 
 if __name__ == '__main__':

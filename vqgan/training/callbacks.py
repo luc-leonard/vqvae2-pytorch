@@ -14,9 +14,9 @@ class LossLogCallback:
     def __init__(self, run_dir):
         self.tb_writer = SummaryWriter(run_dir + '/logs/')
 
-    def on_step(self, model, x, y, predicted, logs, step):
+    def on_step(self, type, model, x, y, predicted, logs, step):
         for loss_name, loss_value in logs.items():
-            self.tb_writer.add_scalar(loss_name, loss_value, step)
+            self.tb_writer.add_scalar(type + '/' + loss_name, loss_value, step)
 
 
 
@@ -27,7 +27,7 @@ class ImageReconstructionTensorBoardCallback:
         self.size = size
 
     @torch.no_grad()
-    def on_step(self, model, x, y, model_output, losses, step):
+    def on_step(self, type, model, x, y, model_output, losses, step):
         if step % self.every == 0:
             sample = x[0].unsqueeze(0)
             output = model_output[1][0].unsqueeze(0)
@@ -37,8 +37,8 @@ class ImageReconstructionTensorBoardCallback:
             latents_indices = nn.Upsample(size=(self.size, self.size))(latents_indices.unsqueeze(0).float()).long().squeeze(0)
             latents_indices = torch.stack([latents_indices, latents_indices, latents_indices]).permute(1, 0, 2, 3)
             sample = (sample + 1) / 2
-            self.tb_writer.add_image('reconstruction',
+            self.tb_writer.add_image(type + '/reconstruction',
                                      torchvision.utils.make_grid(torch.cat([sample, output, latents_indices]), nrow=13),
                                      step)
-            self.tb_writer.add_scalar('Used codes', torch.unique(latents_indices).shape[0], step)
+            self.tb_writer.add_scalar(type + '/Used codes', torch.unique(latents_indices).shape[0], step)
 

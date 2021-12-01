@@ -4,16 +4,16 @@ model:
     codebook:
       target: vector_quantize_pytorch.VectorQuantize
       params:
-        dim: 256
+        dim: 512
         codebook_size: 1024
     encoder_decoder:
-      encoder_target: vqgan.modules.encoders.legacy.Encoder
-      decoder_target: vqgan.modules.decoders.legacy.Decoder
+      encoder_target: vqgan.modules.encoders.encoders.MultiLayerEncoder2D
+      decoder_target: vqgan.modules.decoders.decoders.MultiLayerDecoder2D
       params:
         resolution: 256
         in_channels: 3 # RGB
         out_channels: 3 # RGB
-
+        attention_target: vqgan.modules.attention.AttnBlock
         channels: 128 # first convolution out dim
         channel_multiplier: [1, 2, 2, 4] # by how much to multiply the channel for each successive layer
         z_channels: 256 # the last layer
@@ -30,7 +30,7 @@ loss:
     target: vqgan.modules.losses.LpipsLoss
     params:
       perceptual_model: vgg
-    factor: 1.0
+    factor: 0.8
   discriminator:
     target: vqgan.models.discriminator.NLayerDiscriminator
     device: cuda
@@ -39,7 +39,7 @@ loss:
       n_layers: 3
       use_actnorm: False
     factor: 1.0
-    iter_start: 10000
+    iter_start: 35000
 
 
 
@@ -48,11 +48,11 @@ train:
   callbacks:
     - target: vqgan.training.callbacks.ImageReconstructionTensorBoardCallback
       params:
-        every: 50
+        every: 100
     - target: vqgan.training.callbacks.LossLogCallback
       params:
   total_steps: 150000
-  save_every: 500
+  save_every: 1000
   batch_size: 4
 
 
@@ -60,4 +60,4 @@ data:
   target: utils.data.MyImageFolderDataset
   params:
     data_dir: /media/lleonard/big_slow_disk/datasets/ffhq/images1024x1024/
-    resize: [256, 256]
+    resize: 256

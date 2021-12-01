@@ -1,4 +1,4 @@
-
+import torch
 from torch import nn
 
 from utils.utils import get_class_from_str
@@ -50,6 +50,9 @@ class VQModel(nn.Module):
     def get_last_layer(self):
         return self.decoder.get_last_layer()
 
+    def load_from_file(self, checkpoint_path):
+        self.load_state_dict(torch.load(checkpoint_path)['model'])
 
-def make_model_from_config(config):
+
+def make_model_from_config(config) -> VQModel:
     return get_class_from_str(config.target)(**config.params)

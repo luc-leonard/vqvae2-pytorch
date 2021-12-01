@@ -40,14 +40,15 @@ class CombinedLosses(nn.Module):
         self.perceptual_loss = get_class_from_str(loss_config.perceptual.target)(**loss_config.perceptual.params)
         self.perceptual_loss_factor = loss_config.perceptual.factor
 
-        self.discriminator = nn.Module() # empty module
+        self.discriminator = None
+        self.discriminator_opt = None
         if 'discriminator' in loss_config:
             self.discriminator = get_class_from_str(loss_config.discriminator.target)(**loss_config.discriminator.params)\
                 .to(loss_config.discriminator.device)
             self.discriminator_factor = loss_config.discriminator.factor
             self.disc_loss = hinge_d_loss
             self.discriminator_iter_start = loss_config.discriminator.iter_start
-        self.discriminator_opt = torch.optim.Adam(self.discriminator.parameters(), lr=4.5e-6, betas=(0.5, 0.999))
+            self.discriminator_opt = torch.optim.Adam(self.discriminator.parameters(), lr=4.5e-6, betas=(0.5, 0.999))
 
     def calculate_adaptive_weight(self, nll_loss, g_loss, last_layer=None):
         if last_layer is not None:
