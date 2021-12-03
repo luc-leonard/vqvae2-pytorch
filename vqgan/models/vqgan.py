@@ -51,7 +51,7 @@ class VQModel(nn.Module):
         return self.decoder.get_last_layer()
 
     def load_from_file(self, checkpoint_path):
-        self.load_state_dict(torch.load(checkpoint_path)['model'])
+        self.load_state_dict(torch.load(checkpoint_path, map_location='cpu')['model'])
 
 
 def make_model_from_config(config) -> VQModel:

@@ -44,11 +44,12 @@ class MyImageFolderDataset(Dataset):
 
 
 class LatentsDataset(Dataset):
-    def __init__(self, data_dir):
+    def __init__(self, data_dir, block_size=None):
         self.root_dir = data_dir
         files = glob.glob(data_dir + '/*.pt')
         self.size = 0
         self.files = []
+        self.block_size = block_size
         for file in files:
             self.files.append(torch.load(file, map_location='cpu'))
             # print(f'{file} => {self.files[-1].shape}')
@@ -64,7 +65,6 @@ class LatentsDataset(Dataset):
             if self.files[0].shape[0] < self.files[-1].shape[0]:
                 self.files = self.files[1:] + self.files[0]
 
-
     def __len__(self):
         return self.size
 
@@ -74,7 +74,10 @@ class LatentsDataset(Dataset):
             file_idx = idx // item_per_file
             item_idx = idx % item_per_file
             value = torch.flatten(self.files[file_idx][item_idx])
-            return value[:- 1], value[1:]
+            if self.block_size is not None:
+                random_idx = np.random.randint(0, self.files[0].shape[0] - self.block_size)
+                value = value[random_idx:]
+            return value[:-1], value[1:]
         except Exception as e:
             print(f'{idx} => [{file_idx}][{item_idx}]')
             print(self.files[file_idx].shape)

@@ -1,14 +1,16 @@
 from torch import nn
+
+from utils.utils import get_class_from_str
 from ..utils import Normalize, nonlinearity
 from ..resnet import ResnetBlock, ResnetBlock1D
 from ..attention import AttnBlock
 from ..upsample import Downsample
 
 
-class Encoder1D(nn.Module):
-    def __init__(self, resolution, in_channels, channels, z_channels, channel_multiplier, num_res_blocks,
-                 resolution_attention, **kwargs):
-        super(Encoder1D, self).__init__()
+class WaveformEncoder(nn.Module):
+    def __init__(self, samples_per_second, in_channels, channels, z_channels, channel_multiplier, num_res_blocks,
+                 attention_layers_at, **kwargs):
+        super(WaveformEncoder, self).__init__()
 
         self.num_layers = len(channel_multiplier)
         self.num_res_blocks = num_res_blocks
@@ -18,9 +20,9 @@ class Encoder1D(nn.Module):
 
         self.down = nn.ModuleList()
 
-        current_resolution = resolution
+        current_block_per_second = samples_per_second
         for level in range(self.num_layers):
-            print(f'resolution for layer {level}: {current_resolution}')
+            print(f'blocks per second for layer {level}: {current_block_per_second}')
             block_in = channels * in_ch_mult[level]
             block_out = channels * channel_multiplier[level]
             block = nn.ModuleList()
@@ -29,14 +31,15 @@ class Encoder1D(nn.Module):
                 block.append(ResnetBlock1D(in_channels=block_in,
                                          out_channels=block_out))
                 block_in = block_out
-                if current_resolution in resolution_attention:
+                if level in attention_layers_at:
                     attention.append(AttnBlock(block_out))
             down = nn.Module()
             down.block = block
             down.attention = attention
             if level != self.num_layers - 1:
                 down.downsample = Downsample(in_channels=block_out, with_conv=False)
-                current_resolution //= 2
+                current_block_per_second //= 2
+            print(f'current block at layer {level}: {current_block_per_second}')
             self.down.append(down)
 
         block_in = channels * channel_multiplier[-1]
@@ -76,7 +79,7 @@ class Encoder1D(nn.Module):
 
 
 class MultiLayerEncoder2D(nn.Module):
-    def __init__(self, resolution, in_channels, channels, z_channels, channel_multiplier, num_res_blocks, resolution_attention, **kwargs):
+    def __init__(self, resolution, in_channels, channels, z_channels, channel_multiplier, num_res_blocks, resolution_attention, attention_layer_cls_name = None, **kwargs):
         super(MultiLayerEncoder2D, self).__init__()
 
         self.num_layers = len(channel_multiplier)
@@ -88,6 +91,11 @@ class MultiLayerEncoder2D(nn.Module):
         self.down = nn.ModuleList()
 
         current_resolution = resolution
+        AttentionLayer = AttnBlock
+        if attention_layer_cls_name is not None:
+            AttentionLayer = get_class_from_str(attention_layer_cls_name)
+
+
         for level in range(self.num_layers):
             print(f'resolution for layer {level}: {current_resolution}')
             block_in = channels * in_ch_mult[level]
@@ -99,7 +107,7 @@ class MultiLayerEncoder2D(nn.Module):
                                          out_channels=block_out))
                 block_in = block_out
                 if current_resolution in resolution_attention:
-                    attention.append(AttnBlock(block_out))
+                    attention.append(AttentionLayer(block_out))
             down = nn.Module()
             down.block = block
             down.attention = attention
@@ -112,7 +120,7 @@ class MultiLayerEncoder2D(nn.Module):
 
         self.mid = nn.Module()
         self.mid.block_1 = ResnetBlock(in_channels=block_in, out_channels=block_in)
-        self.mid.attn_1 = AttnBlock(block_in)
+        self.mid.attn_1 = AttentionLayer(block_in)
         self.mid.block_2 = ResnetBlock(in_channels=block_in, out_channels=block_in)
 
         # end

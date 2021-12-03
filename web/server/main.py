@@ -13,7 +13,7 @@ app = flask.Flask(__name__)
 
 
 device = 'cpu'
-config = OmegaConf.load('../../vqgan/config/ffhq_small_gan_f8.yml')
+config = OmegaConf.load('../../vqgan/config/ffhq_256_f8.yml')
 print(config)
 vqgan_model: VQModel = vqgan.make_model_from_config(config.model).to(device)
 checkpoint = torch.load('../../vqgan/runs/ffhq_256_gan/vqgan_273000.pt', map_location='cpu')['model']
