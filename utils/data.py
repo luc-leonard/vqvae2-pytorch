@@ -44,12 +44,12 @@ class MyImageFolderDataset(Dataset):
 
 
 class LatentsDataset(Dataset):
-    def __init__(self, data_dir, block_size=None):
+    def __init__(self, data_dir, patch_size=None):
         self.root_dir = data_dir
         files = glob.glob(data_dir + '/*.pt')
         self.size = 0
         self.files = []
-        self.block_size = block_size
+        self.patch_size = patch_size
         for file in files:
             self.files.append(torch.load(file, map_location='cpu'))
             # print(f'{file} => {self.files[-1].shape}')
@@ -73,10 +73,10 @@ class LatentsDataset(Dataset):
             item_per_file = self.files[0].shape[0]
             file_idx = idx // item_per_file
             item_idx = idx % item_per_file
-            value = torch.flatten(self.files[file_idx][item_idx])
-            if self.block_size is not None:
-                random_idx = np.random.randint(0, self.files[0].shape[0] - self.block_size)
-                value = value[random_idx:]
+            value = self.files[file_idx][item_idx]
+            if self.patch_size is not None:
+                value = TF.RandomCrop((self.patch_size, self.patch_size))(value)
+            value = torch.flatten(value)
             return value[:-1], value[1:]
         except Exception as e:
             print(f'{idx} => [{file_idx}][{item_idx}]')

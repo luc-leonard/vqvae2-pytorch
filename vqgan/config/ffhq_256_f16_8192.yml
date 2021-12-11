@@ -4,8 +4,8 @@ model:
     codebook:
       target: vector_quantize_pytorch.VectorQuantize
       params:
-        dim: 512
-        codebook_size: 1024
+        dim: 1024
+        codebook_size: 8192
     encoder_decoder:
       encoder_target: vqgan.modules.encoders.encoders.MultiLayerEncoder2D
       decoder_target: vqgan.modules.decoders.decoders.MultiLayerDecoder2D
@@ -39,7 +39,8 @@ loss:
       n_layers: 3
       use_actnorm: False
     factor: 1.0
-    iter_start: 10000
+    iter_start: 30000
+
 
 
 
@@ -51,7 +52,7 @@ train:
         every: 50
     - target: vqgan.training.callbacks.LossLogCallback
       params:
-  save_every: 500
+  save_every: 5000
   batch_size: 8
 
 
@@ -59,4 +60,4 @@ data:
   target: utils.data.MyImageFolderDataset
   params:
     data_dir: /media/lleonard/big_slow_disk/datasets/ffhq/images1024x1024/
-    crop_size: 256
+    resize: 256

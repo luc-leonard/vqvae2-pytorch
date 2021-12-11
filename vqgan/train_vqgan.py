@@ -118,7 +118,7 @@ def main(name, config, resume_from, epochs, seed):
     print(f'test data: {len(test_dataset)}')
     current_epoch = base_step // len(train_dataset)
     for _ in range(epochs):
-        print(f'epoch {current_epoch}')
+        print(f'epoch {current_epoch}, base_step {base_step}')
         model = model.train()
         new_base_step = epoch(name, loss_fn, callbacks, model, [train_dataloader, test_dataloader], optimizer, base_step, config)
         model = model.eval()

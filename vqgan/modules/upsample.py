@@ -34,6 +34,7 @@ class Downsample1D(nn.Module):
             x = F.avg_pool1d(x, kernel_size=2, stride=2)
         return x
 
+
 class Downsample(nn.Module):
     def __init__(self, in_channels, with_conv):
         super().__init__()
