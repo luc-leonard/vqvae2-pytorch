@@ -192,6 +192,17 @@ class GPT(nn.Module):
         # if we are given some desired targets also calculate the loss
         loss = None
         if targets is not None:
+            if targets.shape[1] != logits.shape[1]:
+                # source might be longer than target if it is prepented with conditioning data
+                logits = logits[:, targets.shape[1] + 1:].contiguous()
+
             loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1))
 
         return logits, loss
+
+    def top_k_logits(self, logits, k):
+        v, ix = torch.topk(logits, k)
+        out = logits.clone()
+        out[out < v[..., [-1]]] = -float('Inf')
+        return out
+

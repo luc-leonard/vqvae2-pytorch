@@ -1,4 +1,5 @@
 import glob
+import math
 import random
 from pathlib import Path
 
@@ -17,7 +18,7 @@ import torchvision.transforms as TF
 
 from utils.data import LatentsDataset
 from utils.utils import get_class_from_str
-
+import os
 device = 'cuda'
 
 def make_callback(config, name, vqgan_model):
@@ -28,7 +29,7 @@ def make_callback(config, name, vqgan_model):
         tb_writer.add_scalar('loss', loss, step)
         raw_model = model.module if hasattr(model, "module") else model
 
-        if step % config.save_every == 0:
+        if step % config.training.save_every == 0:
             print('saving model')
             torch.save({
                 'model': raw_model.state_dict(),
@@ -37,25 +38,39 @@ def make_callback(config, name, vqgan_model):
                         'step': step,
                         },
                 f'./runs/{name}/gpt_model_checkpoint_{step}.pt')
+            file_name = f'./runs/{name}/gpt_model_checkpoint_latest.pt'
 
-        if step % config.sample_every == 0:
+            os.symlink(f'./runs/{name}/gpt_model_checkpoint_{step}.pt', file_name + '.tmp')
+            os.rename(file_name + '.tmp', file_name)
+
+        if step % config.training.sample_every == 0:
             print('generating sample')
+            if x.shape != y.shape:
+                # if input is larger than output, it means that it is prepended with conditioning
+                seed = x[0][:config.data.params.patch_size[0] * config.data.params.patch_size[1]] # seed must contains the coordinates
+                generated_latents_indices = sample(raw_model, seed.unsqueeze(0).to(device), 256, sample=True)
+                generated_latents_indices = generated_latents_indices[:, 256:]\
+                    .view(1, 16, 16)\
+                    .to('cpu')
+            else:
+                seed = y[0, 0:1].unsqueeze(0) #seed just contains the first latent indice
 
-            generated_latents_indices = sample(raw_model, torch.tensor([y[0, 0]]).unsqueeze(0).to(device), 256, sample=True)\
-                .view(1, 16, 16)\
-                .to('cpu')
+                generated_latents_indices = sample(raw_model, seed.to(device), 255, sample=True)
+                generated_latents_indices = generated_latents_indices\
+                    .view(1, 16, 16)\
+                    .to('cpu')
 
             generated_latents = vqgan_model.vq.embedding(generated_latents_indices).permute(0, 3, 1, 2)
-            upscaled_latents_indices = torch.nn.Upsample(size=(256, 256))(generated_latents_indices.unsqueeze(1).float()).squeeze(1).long()
-
+            upscaled_latents_indices = torch.nn.Upsample(size=(256,256))(generated_latents_indices.unsqueeze(1).float()).squeeze(1).long()
             upscaled_latents_indices = torch.stack([upscaled_latents_indices, upscaled_latents_indices, upscaled_latents_indices]).permute(1, 0, 2, 3)
+
             image = vqgan_model.decode(generated_latents)
             image = torch.clamp(image, -1, 1)
             image = (image + 1) / 2
             tb_writer.add_image('sample', torch.cat([image.squeeze(0), upscaled_latents_indices.squeeze(0)], 1), step)
 
             # y lacks the first token :)
-            y = torch.cat([y.cpu(), torch.tensor([16]).repeat(config.batch_size).view(-1, 1)], dim=-1).view(-1, 16, 16)[:1, :, :]
+            y = torch.cat([y.cpu(), torch.tensor([16]).repeat(config.training.batch_size).view(-1, 1)], dim=-1).view(-1, 16, 16)[:1, :, :]
             upscaled_y = torch.nn.Upsample(size=(256, 256))(y.float().unsqueeze(0)).squeeze(0).squeeze(0).long()
             embeds = vqgan_model.vq.embedding(y).permute(0, 3, 1, 2)
             real_image = vqgan_model.decode(embeds).squeeze(0)
@@ -96,11 +111,8 @@ def train_gpt(name, resume_from, config_path):
 
     train_dataset, test_dataset = torch.utils.data.random_split(dataset, [int(0.8 * len(dataset)), len(dataset) - int(0.8 * len(dataset))])
 
-    print(len(train_dataset))
-    print(len(test_dataset))
     gpt_config = GPTConfig(**config.model.gpt.params)
     model, opt_data, base_step = make_gpt(resume_from, gpt_config)
-    print(base_step)
 
 
 
@@ -109,7 +121,7 @@ def train_gpt(name, resume_from, config_path):
         batch_size=config.training.batch_size,
         learning_rate=config.training.learning_rate,
         max_epochs=50),
-        callback=make_callback(config.training, name, vqgan_model))
+        callback=make_callback(config, name, vqgan_model))
     trainer.train(base_step, opt_data)
     trainer.save_checkpoint()
 

@@ -127,6 +127,9 @@ class MultiLayerEncoder2D(nn.Module):
         self.norm_out = Normalize(block_in)
         self.conv_out = nn.Conv2d(block_in, z_channels, kernel_size=3, stride=1, padding=1)
 
+    def get_compression_factor(self):
+        return 2 ** (self.num_layers - 1)
+
     def forward(self, x):
         # downsampling
         hs = [self.conv_in(x)]

@@ -53,6 +53,8 @@ class VQModel(nn.Module):
     def load_from_file(self, checkpoint_path):
         self.load_state_dict(torch.load(checkpoint_path, map_location='cpu')['model'])
 
+    def get_compression_factor(self):
+        return self.encoder.get_compression_factor()
 
 def make_model_from_config(config) -> VQModel:
     return get_class_from_str(config.target)(**config.params)
