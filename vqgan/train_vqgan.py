@@ -30,12 +30,7 @@ def do_step(optimizer, loss_fn, model, image, step, optimizer_idx, callbacks):
         callback.on_step('train', model, image, image, model_output, log, step)
 
 
-def epoch(name, loss_fn, callbacks, model, dataloaders, optimizer, base_step, config):
-
-    train_dl = dataloaders[0]
-    test_dl = dataloaders[1]
-
-    disc_turn = False
+def epoch(name, loss_fn, callbacks, model, train_dl, optimizer, base_step, config):
     for i, (image, _) in tqdm(enumerate(train_dl), total=len(train_dl)):
         step = base_step + i
         if len(image.shape) == 3:
@@ -120,7 +115,7 @@ def main(name, config, resume_from, epochs, seed):
     for _ in range(epochs):
         print(f'epoch {current_epoch}, base_step {base_step}')
         model = model.train()
-        new_base_step = epoch(name, loss_fn, callbacks, model, [train_dataloader, test_dataloader], optimizer, base_step, config)
+        new_base_step = epoch(name, loss_fn, callbacks, model, train_dataloader, optimizer, base_step, config)
         model = model.eval()
         validate(base_step, callbacks, loss_fn, model, test_dataloader)
         base_step = new_base_step

@@ -1,7 +1,7 @@
 model:
   vqgan:
     target: vqgan.models.vqgan.VQModel
-    checkpoint_path: ./runs/ffhq_256_f16_8192/vqgan_209114.pt
+    checkpoint_path: ./runs/ffhq_f16_8192/vqgan_173748.pt
     params:
       codebook:
         target: vector_quantize_pytorch.VectorQuantize
@@ -23,22 +23,23 @@ model:
           resolution_attention: [16]
   gpt:
     params:
-      vocab_size: 8192 # same as codebook size
-      block_size: 256 # dimension of the embedding
-      n_layer: 12
-      n_head: 16
-      n_embd: 1024
+      vocab_size: 8192 # same as codebook size + coord vocab (4096)
+      block_size: 4096 # dimension of the embedding + coordinates
+      n_layer: 12 # number of layers
+      n_head: 8
+      n_embd: 512
       embd_pdrop: 0.1
       resid_pdrop: 0.1
       attn_pdrop: 0.1
 
+
 training:
-  save_every: 1000
+  save_every: 5000
   sample_every: 100
-  batch_size: 32
-  learning_rate: 3e-4
+  batch_size: 8
+  learning_rate: 3e-5
 
 data:
   target: utils.data.ImageLatentsDataset
   params:
-    data_dir: ../data/ffhq_256_f16_8192_latents/
+    data_dir: ../data/ffhq_f16_8192_latents/

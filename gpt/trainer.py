@@ -32,13 +32,15 @@ class TrainerConfig:
     ckpt_path = None
     num_workers = 0 # for DataLoader
 
+    gradient_accumulation_steps = 4
+
     def __init__(self, **kwargs):
         for k,v in kwargs.items():
             setattr(self, k, v)
 
 class Trainer:
 
-    def __init__(self, model, train_dataset, test_dataset, config, callback=None):
+    def __init__(self, model, train_dataset, test_dataset, config: TrainerConfig, callback=None):
         self.model = model
         self.train_dataset = train_dataset
         self.test_dataset = test_dataset
@@ -72,28 +74,30 @@ class Trainer:
                                 batch_size=config.batch_size,
                                 num_workers=config.num_workers)
 
-            losses = []
+            accumulate_step = 0
             pbar = tqdm(enumerate(loader), total=len(loader))
             for _, (x, y) in pbar:
                 # place data on the correct device
                 x = x.to(self.device)
                 y = y.to(self.device)
 
+                accumulate_step += 1
                 # forward the model
                 with torch.set_grad_enabled(is_train):
                     logits, loss = model(x, y)
                     loss = loss.mean() # collapse all losses if they are scattered on multiple gpus
-                    losses.append(loss.item())
 
                 if is_train:
                     if self.callback is not None:
                         self.callback(base_step, model, loss, optimizer, x, y)
                     base_step = base_step + 1
                     # backprop and update the parameters
-                    model.zero_grad()
+                    if accumulate_step % self.config.gradient_accumulation_steps == 0:
+                        model.zero_grad()
                     loss.backward()
                     torch.nn.utils.clip_grad_norm_(model.parameters(), config.grad_norm_clip)
-                    optimizer.step()
+                    if accumulate_step % self.config.gradient_accumulation_steps == 0:
+                        optimizer.step()
 
                     # decay the learning rate based on our progress
                     if config.lr_decay:
@@ -113,11 +117,6 @@ class Trainer:
 
                     # report progress
                     pbar.set_description(f"epoch {epoch+1} iter { base_step }: train loss {loss.item():.5f}. lr {lr:e}")
-
-            if not is_train:
-                test_loss = float(np.mean(losses))
-                logger.info("test loss: %f", test_loss)
-                return test_loss
             return base_step
 
         best_loss = float('inf')
@@ -125,11 +124,11 @@ class Trainer:
         for epoch in range(config.max_epochs):
 
             base_step = run_epoch('train', base_step)
-            if self.test_dataset is not None:
-                test_loss = run_epoch('test', 0)
-
-            # supports early stopping based on the test loss, or just save always if no test set is provided
-            good_model = self.test_dataset is None or test_loss < best_loss
-            if self.config.ckpt_path is not None and good_model:
-                best_loss = test_loss
-                self.save_checkpoint()
+            # if self.test_dataset is not None:
+            #     test_loss = run_epoch('test', 0)
+            #
+            # # supports early stopping based on the test loss, or just save always if no test set is provided
+            # good_model = self.test_dataset is None or test_loss < best_loss
+            # if self.config.ckpt_path is not None and good_model:
+            #     best_loss = test_loss
+            #     self.save_checkpoint()

@@ -4,7 +4,6 @@ import numpy as np
 import torch
 from PIL import Image
 from torch.utils.data import Dataset
-import torchvision.transforms as TF
 import albumentations
 import traceback
 
@@ -44,13 +43,20 @@ class MyImageFolderDataset(Dataset):
             print(traceback.format_exc())
 
 
-class LatentsDataset(Dataset):
-    def __init__(self, data_dir, patch_size=None):
+class ImageLatentsDataset(Dataset):
+    def __init__(self, data_dir, patch_size=None,
+                 coord_vocab_offset=0,
+                 coord_embed_size=None,
+                 coords=False,
+                 **ignored):
         self.root_dir = data_dir
         files = glob.glob(data_dir + '/*.pt')
         self.size = 0
+        self.coords = coords
         self.files = []
         self.patch_size = patch_size
+        self.vocab_coord_offset = coord_vocab_offset
+        self.coord_embed_size = coord_embed_size
         if patch_size:
             self.cropper = albumentations.RandomCrop(height=patch_size[0], width=patch_size[1])
             self.cropper = albumentations.Compose([self.cropper],
@@ -87,11 +93,19 @@ class LatentsDataset(Dataset):
                 # we need to crop the image and to add the coordinates to the input
                 h, w = value.shape
                 coord = np.arange(h * w).reshape(h, w, 1)
+                if self.coord_embed_size:
+                    coord = (coord / (h * w)) * self.coord_embed_size
+                if self.vocab_coord_offset:
+                    coord = coord + self.vocab_coord_offset
                 out = self.cropper(image=value.numpy(), coord=coord)
 
                 value = torch.flatten(torch.tensor(out['image']))
                 coord = torch.flatten(torch.tensor(out['coord']))
-                input = torch.cat([coord, value], dim=0)[:-1]
+                if self.coords:
+                    input = torch.cat([coord, value], dim=0)
+                else:
+                    input = value
+                input = input[:-1]
                 target = value[1:]
             else:
                 value = torch.flatten(value)
@@ -99,6 +113,62 @@ class LatentsDataset(Dataset):
                 target = value[1:]
 
             return input, target
+        except Exception as e:
+            print(f'{idx} => [{file_idx}][{item_idx}]')
+            print(self.files[file_idx].shape)
+            print(idx, e)
+            raise e
+
+
+class PerceiverLatentsDataset(Dataset):
+    def __init__(self, data_dir, patch_size=None,
+                 coord_vocab_offset=0,
+                 coord_embed_size=None,
+                 coords=False,
+                 **ignored):
+        self.root_dir = data_dir
+        files = glob.glob(data_dir + '/*.pt')
+        self.size = 0
+        self.coords = coords
+        self.files = []
+        self.patch_size = patch_size
+        self.vocab_coord_offset = coord_vocab_offset
+        self.coord_embed_size = coord_embed_size
+
+        for file in files:
+            self.files.append(torch.load(file, map_location='cpu'))
+            self.size += self.files[-1].shape[0]
+
+        # none is a 'last file' that would not contain the same amount as the others
+        self.order_tensors()
+        self.cropper = albumentations.GridDropout(holes_number_x=1, holes_number_y=1, p=1, random_offset=True)
+
+    def order_tensors(self):
+        # puts the only file with less tensors as the last one in the `files` array
+        if self.files[0].shape[0] == self.files[-1].shape[0]:
+            for idx, file in enumerate(self.files):
+                if file.shape[0] != self.files[0].shape[0]:
+                    # this is out last file. put it at the end of the list
+                    self.files = self.files[:idx] + self.files[idx + 1:] + [file]
+        else:
+            if self.files[0].shape[0] < self.files[-1].shape[0]:
+                self.files = self.files[1:] + self.files[0]
+
+    def __len__(self):
+        return self.size
+
+    def __getitem__(self, idx):
+        try:
+            item_per_file = self.files[0].shape[0]
+            file_idx = idx // item_per_file
+            item_idx = idx % item_per_file
+            value = self.files[file_idx][item_idx]
+            h, w = value.shape
+            ex = self.cropper(image=np.ones((h, w)))
+            value = torch.flatten(value)
+            mask = ~torch.flatten(torch.tensor(ex['image'])).bool()
+
+            return value, torch.tensor(0).float(), mask
         except Exception as e:
             print(f'{idx} => [{file_idx}][{item_idx}]')
             print(self.files[file_idx].shape)

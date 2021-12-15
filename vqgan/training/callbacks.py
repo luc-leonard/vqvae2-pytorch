@@ -41,4 +41,3 @@ class ImageReconstructionTensorBoardCallback:
                                      torchvision.utils.make_grid(torch.cat([sample, output, latents_indices]), nrow=13),
                                      step)
             self.tb_writer.add_scalar(type + '/Used codes', torch.unique(latents_indices).shape[0], step)
-

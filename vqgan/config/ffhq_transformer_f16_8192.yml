@@ -23,9 +23,9 @@ model:
           resolution_attention: [16]
   gpt:
     params:
-      vocab_size: 8192 # same as codebook size
+      vocab_size: 8192 # same as codebook size + coord vocab (4096)
       block_size: 512 # dimension of the embedding + coordinates
-      n_layer: 24
+      n_layer: 24 # number of layers
       n_head: 16
       n_embd: 1024
       embd_pdrop: 0.1
@@ -36,11 +36,12 @@ model:
 training:
   save_every: 5000
   sample_every: 100
-  batch_size: 8
-  learning_rate: 3e-5
+  batch_size: 6
+  learning_rate: 2e-5
 
 data:
-  target: utils.data.LatentsDataset
+  target: utils.data.ImageLatentsDataset
   params:
     data_dir: ../data/ffhq_f16_8192_latents/
     patch_size: [16, 16]
+    coords: True

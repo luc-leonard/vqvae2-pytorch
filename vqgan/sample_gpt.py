@@ -20,7 +20,7 @@ device = 'cuda'
 vqgan_device = 'cuda'
 
 
-def __generate_window(gpt_model, vqgan_model):
+def __generate_window(gpt_model, vqgan_model, window_size=16):
     c_indices_shape = torch.Size([1, 64 * 64])
     c_code_shape = torch.Size([1, 1024, 64, 64])
 
@@ -29,7 +29,8 @@ def __generate_window(gpt_model, vqgan_model):
     z_indices = torch.ones(z_indices_shape, device=device).long()
     z_indice_shape = z_indices.shape
 
-
+    cidx = torch.tensor(np.arange(64 * 64).reshape((1, 64, 64, 1))).to(device)
+    print(cidx)
     idx = z_indices
     print(z_code_shape)
     idx = idx.reshape(z_code_shape[0], z_code_shape[2], z_code_shape[3])
@@ -60,11 +61,14 @@ def __generate_window(gpt_model, vqgan_model):
             j_start = j - local_j
             j_end = j_start + 16
 
+
+            cpatch = cidx[:, i_start:i_end, j_start:j_end]
+            cpatch = cpatch.reshape(cpatch.shape[0], -1)
+
             patch = idx[:, i_start:i_end, j_start:j_end]
-
-
             patch = patch.reshape(patch.shape[0], -1)
 
+            patch = torch.cat((cpatch, patch), dim=1)
             logits, _ = gpt_model(patch[:, :-1])
             logits = logits[:, -256:, :]
             logits = logits.reshape(z_code_shape[0], 16, 16, -1)
@@ -92,7 +96,7 @@ def __generate_window(gpt_model, vqgan_model):
     image = vqgan_model.decode(embeds).squeeze(0)
     image = torch.clamp(image, -1, 1)
     image = (image + 1) / 2
-    TF.ToPILImage()(image).show()
+    return image
 
 
 @click.command()
@@ -111,7 +115,8 @@ def generate(checkpoint_path, config_path, source_image):
     vqgan_model = vqgan.models.vqgan.make_model_from_config(config.model.vqgan).to(vqgan_device)
     vqgan_model.load_from_file(config.model.vqgan.checkpoint_path)
     vqgan_model.eval()
-  #  __generate_window(model, vqgan_model)
+    if 'patch_size' in config.data.params:
+        return __generate_window(model, vqgan_model)
 
     if source_image is not None:
         image = Image.open(source_image).convert('RGB').resize((256, 256))
