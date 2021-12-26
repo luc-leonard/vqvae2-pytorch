@@ -141,7 +141,6 @@ class PerceiverLatentsDataset(Dataset):
 
         # none is a 'last file' that would not contain the same amount as the others
         self.order_tensors()
-        self.cropper = albumentations.GridDropout(holes_number_x=1, holes_number_y=1, p=1, random_offset=True)
 
     def order_tensors(self):
         # puts the only file with less tensors as the last one in the `files` array
@@ -162,11 +161,17 @@ class PerceiverLatentsDataset(Dataset):
             item_per_file = self.files[0].shape[0]
             file_idx = idx // item_per_file
             item_idx = idx % item_per_file
-            value = self.files[file_idx][item_idx]
+            value = self.files[0][0]
             h, w = value.shape
-            ex = self.cropper(image=np.ones((h, w)))
+
             value = torch.flatten(value)
-            mask = ~torch.flatten(torch.tensor(ex['image'])).bool()
+            mask = torch.rand_like(value, dtype=torch.float) < 0.15
+            #value = torch.flatten(value)
+            #mask = torch.randint(0, 2, size=value.shape).bool()
+            # rnd_part = 5 #torch.randint(7, 10, (1,))
+            # masked = value.shape[0] // 2
+            # unmasked = value.shape[0] - masked
+            # mask = torch.cat([torch.zeros(unmasked), torch.ones(masked)]).bool()
 
             return value, torch.tensor(0).float(), mask
         except Exception as e:

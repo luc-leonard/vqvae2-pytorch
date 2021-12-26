@@ -4,6 +4,7 @@ import click
 import torch
 import torchvision.utils
 import tqdm
+from einops import rearrange
 from omegaconf import OmegaConf
 from perceiver_pytorch import PerceiverIO, PerceiverLM
 from torch.utils.data import Dataset
@@ -18,7 +19,10 @@ device = 'cuda'
 @click.command()
 @click.option('--config-path', default='')
 @click.option('--name', default='')
-def main(config_path, name):
+@click.option('--resume-from', default=None)
+def main(config_path, name, resume_from):
+    config = OmegaConf.load(config_path)
+
     model = PerceiverLM(
         dim=1,  # dimension of sequence to be encoded
         #queries_dim=1,  # dimension of decoder queries
@@ -35,49 +39,73 @@ def main(config_path, name):
         latent_dim_head=64,  # number of dimensions per latent self attention head
         weight_tie_layers=False  # whether to weight tie layers (optional, as indicated in the diagram)
     ).to(device)
-    Path(f'./runs/{name}').mkdir(parents=True, exist_ok=True)
 
-    config = OmegaConf.load(config_path)
+    Path(f'./runs/{name}').mkdir(parents=True, exist_ok=True)
+    step = 0
+    optimizer = torch.optim.Adam(model.parameters(), lr=config.training.learning_rate)
+
+    if resume_from:
+        data = torch.load(resume_from, map_location=device)
+        model.load_state_dict(data['model'])
+        step = data['step']
+        optimizer.load_state_dict(data['opt'])
+
+
     vqgan_model = vqgan.models.vqgan.make_model_from_config(config.model.vqgan).eval().to(device)
     vqgan_model.load_from_file(config.model.vqgan.checkpoint_path)
     dataset = get_class_from_str(config.data.target)(**config.data.params)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=config.training.batch_size, shuffle=True)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=config.training.learning_rate)
-    pbar = tqdm.tqdm(dataloader)
-    step = 0
 
+    pbar = tqdm.tqdm(dataloader)
+
+    scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=config.training.learning_rate, total_steps=50_000)
     tb_writer = SummaryWriter(f'./runs/{name}/logs')
-    for image, queries, mask in pbar:
+    pbar = tqdm.tqdm(range(50_000))
+
+    iterator = iter(dataloader)
+    for _ in pbar:
+        try:
+            image, queries, mask = next(iterator)
+        except StopIteration:
+            iterator = iter(dataloader)
+            image, queries, mask = next(iterator)
         image = image.to(device)
         queries = queries.to(device)
         mask = mask.to(device)
+
         masked_indices = image * ~mask
+
         logits = model(masked_indices, mask=mask)
-        loss = F.cross_entropy(logits.view(-1, logits.size(-1)), (image * mask).view(-1).long())
+        labels = torch.where(~mask, -100, image).long()
+
+        logits = rearrange(logits, 'b m c -> b c m')
+        loss = F.cross_entropy(logits, labels)
+
+
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+        scheduler.step()
         pbar.set_description(f'loss: {loss.item():.4f}')
 
         tb_writer.add_scalar('loss', loss.item(), step)
         if step % 100 == 0:
             image = image[0]
             mask = mask[0]
-            logits = logits[0]
+            logits = logits[0].permute(1, 0)
 
             probs = F.softmax(logits, dim=-1)
             ix = torch.multinomial(probs, num_samples=1).squeeze(-1)
-            generated_indices = (image * ~mask + ix * mask).reshape(16, 16)
+            #generated_indices = (image * ~mask + ix * mask).reshape(16, 16)
+            generated_indices = ix.reshape(16, 16)
             masked_indices = (image * ~mask) + (torch.randint(50, 55, ix.shape).to(device) * mask)
-            #generated_indices = ix.reshape(64, 64).long()
 
             unmasked_image = generate_from_indices(generated_indices, vqgan_model)
             masked_image = generate_from_indices(masked_indices.long().view(16, 16), vqgan_model)
             original_image = generate_from_indices(image.long().view(16, 16), vqgan_model)
             tb_writer.add_image('train/sample', torchvision.utils.make_grid([original_image, masked_image, unmasked_image]), step)
 
-            #tb_writer.add_image('train/original', , step)
         step = step + 1
         if step % 1000 == 0:
             torch.save({
@@ -85,7 +113,15 @@ def main(config_path, name):
                 'opt': optimizer.state_dict(),
                 'step': step,
             },
-                f'./runs/{name}/gpt_model_checkpoint_{step}_.pt')
+                f'./runs/{name}/perceiver_checkpoint_{step}.pt')
+
+
+    torch.save({
+        'model': model.state_dict(),
+        'opt': optimizer.state_dict(),
+        'step': step,
+    },
+        f'./runs/{name}/perceiver_checkpoint_{step}.pt')
 
 
 @torch.no_grad()
