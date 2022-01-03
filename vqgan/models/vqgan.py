@@ -6,14 +6,20 @@ from vqgan.modules.quantizers.vector_quantizer import VectorQuantizer
 
 
 class VQModel(nn.Module):
-    def __init__(self, codebook, encoder_decoder):
+    def __init__(self, codebook, encoder_decoder, dimension=2):
         super(VQModel, self).__init__()
         self.encoder = get_class_from_str(encoder_decoder.encoder_target)(**encoder_decoder.params)
-        self.quant_conv = nn.Conv2d(encoder_decoder.params.z_channels, codebook.params.dim, kernel_size=1)
+        if dimension == 2:
+            self.quant_conv = nn.Conv2d(encoder_decoder.params.z_channels, codebook.params.dim, kernel_size=1)
+        elif dimension == 1:
+            self.quant_conv = nn.Conv1d(encoder_decoder.params.z_channels, codebook.params.dim, kernel_size=1)
 
        #  self.vq = get_class_from_str(codebook.target)(**codebook.params)
         self.vq = VectorQuantizer(codebook.params.codebook_size, codebook.params.dim, beta=0.25, remap=None, sane_index_shape=True)
-        self.post_quant_conv = nn.Conv2d(codebook.params.dim, encoder_decoder.params.z_channels, kernel_size=1)
+        if dimension == 2:
+            self.post_quant_conv = nn.Conv2d(codebook.params.dim, encoder_decoder.params.z_channels, kernel_size=1)
+        elif dimension == 1:
+            self.post_quant_conv = nn.Conv1d(codebook.params.dim, encoder_decoder.params.z_channels, kernel_size=1)
 
         self.decoder = get_class_from_str(encoder_decoder.decoder_target)(**encoder_decoder.params)
 

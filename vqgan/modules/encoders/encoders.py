@@ -4,12 +4,12 @@ from utils.utils import get_class_from_str
 from ..utils import Normalize, nonlinearity
 from ..resnet import ResnetBlock, ResnetBlock1D
 from ..attention import AttnBlock
-from ..upsample import Downsample
+from ..upsample import Downsample, Downsample1D
 
 
 class WaveformEncoder(nn.Module):
     def __init__(self, samples_per_second, in_channels, channels, z_channels, channel_multiplier, num_res_blocks,
-                 attention_layers_at, **kwargs):
+                 attention_layers_at, attention_target, **kwargs):
         super(WaveformEncoder, self).__init__()
 
         self.num_layers = len(channel_multiplier)
@@ -21,6 +21,7 @@ class WaveformEncoder(nn.Module):
         self.down = nn.ModuleList()
 
         current_block_per_second = samples_per_second
+        AttnClass = get_class_from_str(attention_target)
         for level in range(self.num_layers):
             print(f'blocks per second for layer {level}: {current_block_per_second}')
             block_in = channels * in_ch_mult[level]
@@ -32,12 +33,13 @@ class WaveformEncoder(nn.Module):
                                          out_channels=block_out))
                 block_in = block_out
                 if level in attention_layers_at:
-                    attention.append(AttnBlock(block_out))
+                    print(f'attention layer at level {level}')
+                    attention.append(AttnClass(block_out))
             down = nn.Module()
             down.block = block
             down.attention = attention
             if level != self.num_layers - 1:
-                down.downsample = Downsample(in_channels=block_out, with_conv=False)
+                down.downsample = Downsample1D(in_channels=block_out, with_conv=False)
                 current_block_per_second //= 2
             print(f'current block at layer {level}: {current_block_per_second}')
             self.down.append(down)
@@ -45,18 +47,19 @@ class WaveformEncoder(nn.Module):
         block_in = channels * channel_multiplier[-1]
 
         self.mid = nn.Module()
-        self.mid.block_1 = ResnetBlock(in_channels=block_in, out_channels=block_in)
-        self.mid.attn_1 = AttnBlock(block_in)
-        self.mid.block_2 = ResnetBlock(in_channels=block_in, out_channels=block_in)
+        self.mid.block_1 = ResnetBlock1D(in_channels=block_in, out_channels=block_in)
+        self.mid.attn_1 = AttnClass(block_in)
+        self.mid.block_2 = ResnetBlock1D(in_channels=block_in, out_channels=block_in)
 
         # end
         self.norm_out = Normalize(block_in)
-        self.conv_out = nn.Conv2d(block_in, z_channels, kernel_size=3, stride=1, padding=1)
+        self.conv_out = nn.Conv1d(block_in, z_channels, kernel_size=3, stride=1, padding=1)
 
     def forward(self, x):
         # downsampling
         hs = [self.conv_in(x)]
         for i_level in range(self.num_layers):
+            print(f'level {i_level} {hs[-1].shape}')
             for i_block in range(self.num_res_blocks):
                 h = self.down[i_level].block[i_block](hs[-1])
                 if len(self.down[i_level].attention) > 0:

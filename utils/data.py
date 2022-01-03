@@ -6,7 +6,7 @@ from PIL import Image
 from torch.utils.data import Dataset
 import albumentations
 import traceback
-
+import torchaudio
 
 class MyImageFolderDataset(Dataset):
     def __init__(self,
@@ -38,6 +38,28 @@ class MyImageFolderDataset(Dataset):
             image = self.transform(image=image)["image"]
             image = (image / 127.5 - 1.0).astype(np.float32)
             return torch.tensor(image).permute(2, 0, 1), torch.tensor(0)
+        except Exception as e:
+            print(e)
+            print(traceback.format_exc())
+
+
+class SoundDataset(Dataset):
+    def __init__(self,
+                 data_dir,
+                 extensions=['.wav'], **ignored):
+        self.files = []
+        for extension in extensions:
+            self.files.extend(glob.glob(data_dir + '/**/*' + extension))
+            self.files.extend(glob.glob(data_dir + '/*' + extension))
+
+    def __len__(self):
+        return len(self.files)
+
+    def __getitem__(self, index):
+        try:
+            waveform, samplerate = torchaudio.load(self.files[index])
+
+            return waveform, torch.tensor(0)
         except Exception as e:
             print(e)
             print(traceback.format_exc())

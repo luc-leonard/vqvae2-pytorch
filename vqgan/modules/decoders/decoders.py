@@ -1,15 +1,15 @@
 import numpy as np
 from torch import nn
-from ..resnet import ResnetBlock
+from ..resnet import ResnetBlock, ResnetBlock1D
 from ..attention import AttnBlock
 from ..upsample import Upsample
 from ..utils import Normalize, nonlinearity
 
 
-class Waveformdecoder(nn.Module):
-    def __init__(self, *,  samples_per_second, in_channels, channels, z_channels, channel_multiplier, num_res_blocks,
+class WaveformDecoder(nn.Module):
+    def __init__(self, *,  samples_per_second, in_channels, out_channels, channels, z_channels, channel_multiplier, num_res_blocks,
                  attention_layers_at, **kwargs):
-        super(MultiLayerDecoder2D, self).__init__()
+        super(WaveformDecoder, self).__init__()
 
         self.num_layers = len(channel_multiplier)
         self.num_res_blocks = num_res_blocks
@@ -26,7 +26,7 @@ class Waveformdecoder(nn.Module):
         self.up = nn.ModuleList()
 
         curr_res = samples_per_second // 2 ** (self.num_layers - 1)
-        self.z_shape = (1, z_channels, curr_res, curr_res)
+        self.z_shape = (1, z_channels, curr_res)
         print("Working with z of shape {} = {} dimensions.".format(
             self.z_shape, np.prod(self.z_shape)))
 
@@ -36,7 +36,7 @@ class Waveformdecoder(nn.Module):
             block_out = channels * channel_multiplier[i_level]
             for i_block in range(self.num_res_blocks + 1):
 
-                block.append(ResnetBlock(in_channels=block_in,
+                block.append(ResnetBlock1D(in_channels=block_in,
                                          out_channels=block_out))
                 block_in = block_out
                 if i_block in attention_layers_at:
@@ -79,6 +79,7 @@ class Waveformdecoder(nn.Module):
         h = nonlinearity(h)
         h = self.conv_out(h)
         return h
+
 
 class MultiLayerDecoder2D(nn.Module):
     def __init__(self, *, resolution, out_channels, channels, z_channels, channel_multiplier, num_res_blocks, resolution_attention, **kwargs):

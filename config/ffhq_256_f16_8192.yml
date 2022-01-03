@@ -1,6 +1,8 @@
 model:
   target: vqgan.models.vqgan.VQModel
+
   params:
+    dimension: 2
     codebook:
       target: vector_quantize_pytorch.VectorQuantize
       params:

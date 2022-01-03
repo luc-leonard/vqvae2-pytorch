@@ -21,6 +21,7 @@ class Upsample1D(nn.Module):
 class Downsample1D(nn.Module):
     def __init__(self, in_channels, with_conv):
         super(Downsample1D, self).__init__()
+        self.with_conv = with_conv
         if self.with_conv:
             self.conv = nn.Conv1d(in_channels, in_channels, kernel_size=3, stride=2, padding=1)
         else:

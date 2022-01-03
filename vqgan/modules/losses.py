@@ -33,7 +33,7 @@ class CombinedLosses(nn.Module):
     def __init__(self, loss_config, learning_rate):
         super(CombinedLosses, self).__init__()
        # self.reconstruction_loss = get_class_from_str(loss_config.reconstruction.target)()
-        self.reconstruction_loss_factor = loss_config.reconstruction.factor
+        #self.reconstruction_loss_factor = loss_config.reconstruction.factor
 
         self.codebook_loss_factor = loss_config.codebook.factor
 

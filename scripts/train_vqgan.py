@@ -32,9 +32,10 @@ def do_step(optimizer, loss_fn, model, image, step, optimizer_idx, callbacks):
 
 def epoch(name, loss_fn, callbacks, model, train_dl, optimizer, base_step, config):
     for i, (image, _) in tqdm(enumerate(train_dl), total=len(train_dl)):
+        print(image.shape)
         step = base_step + i
-        if len(image.shape) == 3:
-            image = image.unsqueeze(0)
+        # if len(image.shape) == 3:
+        #     image = image.unsqueeze(0)
         image = image.to(device)
         do_step(loss_fn.discriminator_opt, loss_fn, model, image, step, 1, callbacks)
         do_step(optimizer, loss_fn, model, image, step, 0, callbacks)
@@ -82,6 +83,7 @@ def seed_everything(seed: int):
 def main(name, config, resume_from, epochs, seed):
     config = OmegaConf.load(config)
     model = make_model_from_config(config.model).to(device)
+    print(model)
     lr = config.train.lr * config.train.batch_size
     loss_fn = CombinedLosses(config.loss, lr)
 
