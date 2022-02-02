@@ -14,17 +14,17 @@ from torchvision.utils import make_grid
 
 from gpt.gpt import GPTConfig
 from gpt.utils import sample
+from scripts.train_gpt import make_gpt
 from vqgan.models import vqgan
 from vqgan.models.vqgan import VQModel
 import torchvision.transforms as TF
 
-from vqgan.train_gpt import make_gpt
 
 app = flask.Flask(__name__)
 cors = CORS(app, resources={r"/*": {"origins": "*"}})
 
 device = 'cuda'
-config = OmegaConf.load('../../vqgan/config/ffhq_256_transformer_f16_8192.yml')
+config = OmegaConf.load('../../config/ffhq_256_transformer_f16_8192.yml')
 config.model.vqgan.checkpoint_path = '../../vqgan/' + config.model.vqgan.checkpoint_path
 
 gpt_config = GPTConfig(**config.model.gpt.params)

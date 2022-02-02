@@ -1,7 +1,26 @@
 model:
-  vqgan:
+  target: model.unet.DiffusionModel
+  params:
+    timestep_embed: 16
+    num_classes: 0
+    size: [64, 64]
+    in_channels: 1
+    out_channels: 1
+    base_hidden_channels: 64
+    n_layers: 4
+    chan_multiplier: [1, 2, 2, 4]
+    inner_layers: [2, 3, 3, 4]
+    attention_layers: [False, False, True, True]
+
+diffusion:
+  target: model.diffusion.GaussianDiffusion
+  params:
+    image_size: 64
+    timesteps: 1000
+
+vqgan:
     target: vqgan.models.vqgan.VQModel
-    checkpoint_path: ./runs/ffhq_f16_8192/vqgan_173748.pt
+    checkpoint_path: ./vqgan/runs/ffhq_f16_8192/vqgan_173748.pt
     params:
       codebook:
         target: vector_quantize_pytorch.VectorQuantize
@@ -21,29 +40,14 @@ model:
           z_channels: 256 # the last layer
           num_res_blocks: 2 # number of residual blocks per layer
           resolution_attention: [16]
-  gpt:
-    params:
-      vocab_size: 12288 # same as codebook size + coord vocab (4096)
-      block_size: 512 # dimension of the embedding + coordinates
-      n_layer: 24 # number of layers
-      n_head: 16
-      n_embd: 1024
-      embd_pdrop: 0.1
-      resid_pdrop: 0.1
-      attn_pdrop: 0.1
+
 
 
 training:
-  save_every: 5000
-  sample_every: 100
-  batch_size: 4
-  learning_rate: 3e-4
+  learning_rate: 1e-5
+  batch_size: 128
 
 data:
   target: utils.data.ImageLatentsDataset
   params:
-    data_dir: ../data/ffhq_f16_8192_latents/
-    patch_size: [16, 16]
-    coord: True
-    coord_vocab_offset: 8192
-    coord_embed_size: 1024
+    root: ./data/ffhq_f16_8192_latents

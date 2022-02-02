@@ -7,34 +7,40 @@ import numpy as np
 import torchvision.datasets
 from torchvision.transforms import ToTensor
 
-from data.image import MyImageFolderDataset
-from model.diffusion import GaussianDiffusion
-from model.unet import UNet, DiffusionModel
+from latent_dffusion.model.diffusion import GaussianDiffusion
+from latent_dffusion.model.unet import UNet, DiffusionModel
 import tqdm
 from torch.utils.tensorboard import SummaryWriter
 
-from utils.config import get_class_from_str
+from utils.utils import get_class_from_str
+
+from vqgan.models import vqgan
 
 device = 'cuda'
 
 
-class DatasetWrapper(torch.utils.data.Dataset):
-    def __init__(self, dataset):
-        self.dataset = dataset
+# class DatasetWrapper(torch.utils.data.Dataset):
+#     def __init__(self, dataset):
+#         self.dataset = dataset
+#
+#     def __len__(self):
+#         return len(self.dataset)
+#
+#     def __getitem__(self, index):
+#         x = self.dataset[index]
+#         image = x[0]
+#         if not isinstance(image, torch.Tensor):
+#             image = ToTensor()(image)
+#         return image, x[1]
 
-    def __len__(self):
-        return len(self.dataset)
-
-    def __getitem__(self, index):
-        x = self.dataset[index]
-        image = x[0]
-        if not isinstance(image, torch.Tensor):
-            image = ToTensor()(image)
-        return image, x[1]
 
 def train(config_path, name, epochs, resume_from):
     run_path = f"runs/{name}"
     config = omegaconf.OmegaConf.load(config_path)
+
+    vqgan_model = vqgan.make_model_from_config(config.vqgan).eval().to(device)
+    vqgan_model.load_from_file(config.vqgan.checkpoint_path)
+
 
     tb_writer = SummaryWriter(run_path)
     model = DiffusionModel(**config.model.params)
@@ -54,30 +60,39 @@ def train(config_path, name, epochs, resume_from):
         g['lr'] = config.training.learning_rate
 
     print('creating dataset')
-    dataset = DatasetWrapper(get_class_from_str(config.data.target)(**config.data.params))
+    dataset = get_class_from_str(config.data.target)(**config.data.params)
 
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=config.training.batch_size, shuffle=True, num_workers=4)
     print('training')
+    continuous_space = torch.linspace(0, 1, 8192).to(device)
     for epoch in range(epochs):
         tb_writer.add_scalar('epoch', epoch, step)
         pbar = tqdm.tqdm(dataloader)
         for image, class_id in pbar:
             image = image.to(device)
+            continuous_image = torch.take(continuous_space, image)
+
             class_id = class_id.to(device)
             opt.zero_grad()
-            loss = diffusion(image, class_id)
+            loss = diffusion(continuous_image, class_id)
             tb_writer.add_scalar("loss", loss.item(), step)
             loss.backward()
             opt.step()
             pbar.set_description(f"{step}: {loss.item():.4f}")
-            if step % 1000 == 0:
-                classes = torch.randint(0, 2, [1]).to(device)
+            if step % 250 == 0:
                 model.eval()
-                generated = diffusion.p_sample_loop((1, model.in_channel, *model.size), classes)
-                generated = (generated + 1) / 2
+                generated_latents_in_linspace = diffusion.p_sample_loop((1, model.in_channel, *model.size))
                 model.train()
-                tb_writer.add_image("image", torchvision.utils.make_grid(generated, nrow=3), step)
-                tb_writer.add_image("real_image", (image[0] + 1) / 2, step)
+                generated_latents_indices = torch.searchsorted(continuous_space, generated_latents_in_linspace).squeeze(1)
+
+                generated_latents = vqgan_model.vq.embedding(generated_latents_indices).permute(0, 3, 1, 2)
+                print(generated_latents.shape)
+                with torch.no_grad():
+                    image = vqgan_model.decode(generated_latents).squeeze(0)
+                    image = torch.clamp(image, -1, 1)
+                    image = (image + 1) / 2
+                    tb_writer.add_image("image", image, step)
+                # tb_writer.add_image("real_image", (image[0] + 1) / 2, step)
                 torch.save({
                     'model_state_dict': diffusion.state_dict(),
                     'optimizer_state_dict': opt.state_dict(),

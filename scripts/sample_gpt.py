@@ -14,7 +14,7 @@ from gpt.utils import sample
 
 import torchvision.transforms as TF
 
-from vqgan.train_gpt import make_gpt
+from scripts.train_gpt import make_gpt
 
 device = 'cuda'
 vqgan_device = 'cuda'

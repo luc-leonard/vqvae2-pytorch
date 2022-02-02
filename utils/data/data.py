@@ -7,6 +7,7 @@ from torch.utils.data import Dataset
 import albumentations
 import traceback
 import torchaudio
+import torchaudio.transforms as TAF
 
 class MyImageFolderDataset(Dataset):
     def __init__(self,
@@ -65,7 +66,64 @@ class SoundDataset(Dataset):
             print(traceback.format_exc())
 
 
+class MelSpectrogramDataset(Dataset):
+    def __init__(self,
+                 data_dir,
+                 extensions=['.wav'], **ignored):
+        self.wav_dataset = SoundDataset(data_dir, extensions)
+        self.transform = TAF.MelSpectrogram(n_mels=128, sample_rate=16000)
+
+    def __len__(self):
+        return len(self.wav_dataset)
+
+    def __getitem__(self, index):
+        waveform, _ = self.wav_dataset[index]
+        mel_spectrogram = self.transform(waveform)
+        return mel_spectrogram, torch.tensor(0)
+
+
 class ImageLatentsDataset(Dataset):
+    def __init__(self, root):
+        self.root_dir = root
+        files = glob.glob(root + '/*.pt')
+        self.files = []
+        self.size = 0
+        for file in files:
+            self.files.append(torch.load(file, map_location='cpu'))
+            self.size += self.files[-1].shape[0]
+
+        # none is a 'last file' that would not contain the same amount as the others
+        self.order_tensors()
+
+    def order_tensors(self):
+        # puts the only file with less tensors as the last one in the `files` array
+        if self.files[0].shape[0] == self.files[-1].shape[0]:
+            for idx, file in enumerate(self.files):
+                if file.shape[0] != self.files[0].shape[0]:
+                    # this is out last file. put it at the end of the list
+                    self.files = self.files[:idx] + self.files[idx + 1:] + [file]
+        else:
+            if self.files[0].shape[0] < self.files[-1].shape[0]:
+                self.files = self.files[1:] + self.files[0]
+
+    def __len__(self):
+        return self.size
+
+    def __getitem__(self, idx):
+        try:
+            item_per_file = self.files[0].shape[0]
+            file_idx = idx // item_per_file
+            item_idx = idx % item_per_file
+            value = self.files[file_idx][item_idx]
+            return value.unsqueeze(0), torch.tensor(0)
+
+        except Exception as e:
+            print(f'{idx} => [{file_idx}][{item_idx}]')
+            print(self.files[file_idx].shape)
+            print(idx, e)
+
+
+class ImageLatentsDatasetForTransformer(Dataset):
     def __init__(self, data_dir, patch_size=None,
                  coord_vocab_offset=0,
                  coord_embed_size=None,
